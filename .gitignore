@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Testing
+coverage/
+.nyc_output/
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Production
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment
+.env
+.env*.local
+.env.development
+.env.production
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Local data
+data/
+*.db
+*.sqlite
+*.sqlite3
+postgres-data/
+
+# Claude Code
+.claude/sessions/
+.claude/cache/
+.claude/settings.local.json
+
+# Misc
+.turbo/
+.vercel/
