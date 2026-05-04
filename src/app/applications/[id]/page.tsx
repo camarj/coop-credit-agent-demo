@@ -34,7 +34,7 @@ export default async function ApplicationPage({ params }: PageProps) {
     .orderBy(asc(applicationStates.version));
 
   const v0 = states[0];
-  const data = v0?.data as {
+  const intake = v0?.contribution as {
     cedula: string;
     ingresos: number;
     monto: number;
@@ -64,16 +64,16 @@ export default async function ApplicationPage({ params }: PageProps) {
           <h3 className="eyebrow mb-4">Datos del solicitante</h3>
           <dl className="grid grid-cols-2 gap-y-3 gap-x-8 text-[var(--fg)]">
             <dt className="text-[var(--fg-muted)]">Cédula</dt>
-            <dd data-testid="data-cedula">{data?.cedula}</dd>
+            <dd data-testid="data-cedula">{intake?.cedula}</dd>
 
             <dt className="text-[var(--fg-muted)]">Ingresos mensuales</dt>
-            <dd data-testid="data-ingresos">USD {data?.ingresos}</dd>
+            <dd data-testid="data-ingresos">USD {intake?.ingresos}</dd>
 
             <dt className="text-[var(--fg-muted)]">Monto solicitado</dt>
-            <dd data-testid="data-monto">USD {data?.monto}</dd>
+            <dd data-testid="data-monto">USD {intake?.monto}</dd>
 
             <dt className="text-[var(--fg-muted)]">Plazo</dt>
-            <dd data-testid="data-plazo">{data?.plazo} meses</dd>
+            <dd data-testid="data-plazo">{intake?.plazo} meses</dd>
           </dl>
         </article>
 

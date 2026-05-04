@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
-import { intakeAgent } from '@/agents/intake';
+import { intakeService } from '@/services/intake';
 import { ConsoleTracer } from '@/lib/tracer';
 
 const tracer = new ConsoleTracer();
@@ -17,7 +17,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const state = await intakeAgent.execute(body, { tracer });
+    const state = await intakeService.execute(body, { tracer });
     return NextResponse.json({
       applicationId: state.applicationId,
       version: state.version,

@@ -21,9 +21,11 @@ export const applications = pgTable('applications', {
 });
 
 /**
- * `application_states` is the append-only log of state snapshots produced
- * by each agent in the orchestration graph.
- * The `application_states_immutable` trigger (see migration 0001) blocks
+ * `application_states` is the append-only log of state contributions produced
+ * by each agent in the orchestration graph. Each row stores ONLY the slice
+ * contributed by that agent — never the full reconstructed state. The full
+ * state is rebuilt by `getLatestFullState()` via reduce/spread over versions.
+ * The `application_states_immutable` trigger (see migration 0000) blocks
  * UPDATE and DELETE statements against this table.
  */
 export const applicationStates = pgTable(
@@ -38,7 +40,7 @@ export const applicationStates = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
-    data: jsonb('data').notNull(),
+    contribution: jsonb('contribution').notNull(),
   },
   (table) => [
     unique('application_states_app_version_unique').on(
