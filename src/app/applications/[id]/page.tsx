@@ -10,6 +10,21 @@ interface PageProps {
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+interface IntakeContribution {
+  cedula: string;
+  ingresos: number;
+  monto: number;
+  plazo: number;
+}
+
+interface IdentityContribution {
+  identity: {
+    name: string;
+    birthDate: string;
+    valid: boolean;
+  };
+}
+
 export default async function ApplicationPage({ params }: PageProps) {
   const { id } = await params;
 
@@ -33,13 +48,15 @@ export default async function ApplicationPage({ params }: PageProps) {
     .where(eq(applicationStates.applicationId, id))
     .orderBy(asc(applicationStates.version));
 
-  const v0 = states[0];
-  const intake = v0?.contribution as {
-    cedula: string;
-    ingresos: number;
-    monto: number;
-    plazo: number;
-  };
+  const v0 = states.find((s) => s.version === 0);
+  const intake = v0?.contribution as IntakeContribution | undefined;
+
+  const v1 = states.find((s) => s.version === 1);
+  const identityContribution = v1?.contribution as IdentityContribution | undefined;
+  const identity = identityContribution?.identity;
+
+  const latestVersion = states.length > 0 ? states[states.length - 1].version : null;
+  const identityResolved = identity !== undefined;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 md:py-24">
@@ -49,19 +66,36 @@ export default async function ApplicationPage({ params }: PageProps) {
           <span>·</span>
           <span data-testid="application-id">{app.id}</span>
           <span>·</span>
-          <span data-testid="latest-version">v{v0?.version ?? '?'}</span>
+          <span data-testid="latest-version">
+            v{latestVersion ?? '?'}
+          </span>
         </div>
         <h1>Solicitud recibida</h1>
         <p className="lead">
-          La solicitud quedó registrada. En slices siguientes los agentes la
-          procesarán.
+          {identityResolved
+            ? 'Identidad verificada contra Registro Civil. Próximos agentes pendientes.'
+            : 'Identidad pendiente — el agente de identidad no completó.'}
         </p>
         <hr className="hairline" />
       </header>
 
-      <section className="mt-12 space-y-8">
-        <article>
-          <h3 className="eyebrow mb-4">Datos del solicitante</h3>
+      <section
+        className="mt-12 space-y-12"
+        data-testid="states-section"
+      >
+        <article data-testid="state-v0">
+          <div className="entry-meta mb-4">
+            <span className="cat">v0</span>
+            <span>·</span>
+            <span>INTAKE</span>
+            {v0 && (
+              <>
+                <span>·</span>
+                <span>{new Date(v0.createdAt).toISOString()}</span>
+              </>
+            )}
+          </div>
+          <h3 className="mb-4">Datos del solicitante</h3>
           <dl className="grid grid-cols-2 gap-y-3 gap-x-8 text-[var(--fg)]">
             <dt className="text-[var(--fg-muted)]">Cédula</dt>
             <dd data-testid="data-cedula">{intake?.cedula}</dd>
@@ -77,21 +111,43 @@ export default async function ApplicationPage({ params }: PageProps) {
           </dl>
         </article>
 
-        <article>
-          <h3 className="eyebrow mb-4">Historial de estados</h3>
-          <ul className="space-y-2">
-            {states.map((s) => (
-              <li key={s.id} className="flex items-baseline gap-3">
-                <span className="font-mono text-xs uppercase tracking-wider text-[var(--fg-subtle)]">
-                  v{s.version}
-                </span>
-                <span>{s.createdByAgent}</span>
-                <span className="text-[var(--fg-subtle)] text-sm">
-                  {new Date(s.createdAt).toISOString()}
-                </span>
-              </li>
-            ))}
-          </ul>
+        <hr className="hairline" />
+
+        <article data-testid="state-v1">
+          <div className="entry-meta mb-4">
+            <span className="cat">v1</span>
+            <span>·</span>
+            <span>IDENTITY</span>
+            {v1 && (
+              <>
+                <span>·</span>
+                <span>{new Date(v1.createdAt).toISOString()}</span>
+              </>
+            )}
+          </div>
+          <h3 className="mb-4">Identidad</h3>
+          {identity ? (
+            <dl className="grid grid-cols-2 gap-y-3 gap-x-8 text-[var(--fg)]">
+              <dt className="text-[var(--fg-muted)]">Nombre</dt>
+              <dd data-testid="identity-name">{identity.name}</dd>
+
+              <dt className="text-[var(--fg-muted)]">Fecha de nacimiento</dt>
+              <dd data-testid="identity-birthdate">{identity.birthDate}</dd>
+
+              <dt className="text-[var(--fg-muted)]">Estado</dt>
+              <dd data-testid="identity-valid">
+                {identity.valid ? 'Válida' : 'Persona fallecida'}
+              </dd>
+            </dl>
+          ) : (
+            <p
+              className="text-[var(--fg-muted)]"
+              data-testid="identity-pending"
+            >
+              Pendiente. La cédula no se pudo verificar contra Registro Civil
+              en este intento.
+            </p>
+          )}
         </article>
       </section>
     </main>
