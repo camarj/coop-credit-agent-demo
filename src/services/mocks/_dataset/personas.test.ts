@@ -58,6 +58,32 @@ describe('master dataset — cedulasNotFound', () => {
   });
 });
 
+describe('master dataset — Equifax baseScore', () => {
+  it('every persona has equifaxBaseScore in [350, 820]', () => {
+    for (const p of personas) {
+      expect(p.equifaxBaseScore).toBeGreaterThanOrEqual(350);
+      expect(p.equifaxBaseScore).toBeLessThanOrEqual(820);
+    }
+  });
+
+  it('distribution covers all four bands (alto / medio / bajo / muy bajo)', () => {
+    const alto = personas.filter((p) => p.equifaxBaseScore >= 750).length;
+    const medio = personas.filter(
+      (p) => p.equifaxBaseScore >= 650 && p.equifaxBaseScore < 750,
+    ).length;
+    const bajo = personas.filter(
+      (p) => p.equifaxBaseScore >= 500 && p.equifaxBaseScore < 650,
+    ).length;
+    const muyBajo = personas.filter((p) => p.equifaxBaseScore < 500).length;
+
+    expect(alto).toBeGreaterThan(0);
+    expect(medio).toBeGreaterThan(0);
+    expect(bajo).toBeGreaterThan(0);
+    expect(muyBajo).toBeGreaterThan(0);
+    expect(alto + medio + bajo + muyBajo).toBe(personas.length);
+  });
+});
+
 describe('master dataset — IESS employment slice', () => {
   it('has exactly 35 vivos with employment data and 5 without (autónomos)', () => {
     const vivos = personas.filter((p) => p.deathDate === undefined);

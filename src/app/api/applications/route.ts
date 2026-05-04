@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { eq, desc } from 'drizzle-orm';
 import { intakeService } from '@/services/intake';
-import { runOrchestrator } from '@/orchestrator';
+import { runOrchestrator, defaultPipeline } from '@/orchestrator';
 import { ConsoleTracer } from '@/lib/tracer';
 import { OperationalError, DomainError } from '@/lib/errors';
 import { db } from '@/db/client';
@@ -46,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    await runOrchestrator(applicationId, { tracer });
+    await runOrchestrator(applicationId, { tracer }, defaultPipeline);
     const version = await readLatestVersion(applicationId);
     return NextResponse.json({ applicationId, version });
   } catch (err) {

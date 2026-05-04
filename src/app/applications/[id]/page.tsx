@@ -33,6 +33,22 @@ interface IncomeContribution {
   };
 }
 
+interface BureauContribution {
+  bureau: {
+    score: number;
+    history: Array<{ at: number; source: string }>;
+    hardInquiriesCount: number;
+  };
+}
+
+interface SagaContribution {
+  __saga: {
+    compensated: string[];
+    reason: string;
+    completedAt: string;
+  };
+}
+
 export default async function ApplicationPage({ params }: PageProps) {
   const { id } = await params;
 
@@ -67,13 +83,32 @@ export default async function ApplicationPage({ params }: PageProps) {
   const incomeContribution = v2?.contribution as IncomeContribution | undefined;
   const income = incomeContribution?.income;
 
+  const v3 = states.find(
+    (s) => s.version === 3 && s.createdByAgent === 'bureau',
+  );
+  const bureauContribution = v3?.contribution as BureauContribution | undefined;
+  const bureau = bureauContribution?.bureau;
+
+  const sagaRow = states.find((s) => s.createdByAgent === 'orchestrator');
+  const sagaContribution = sagaRow?.contribution as
+    | SagaContribution
+    | undefined;
+  const saga = sagaContribution?.__saga;
+
   const latestVersion = states.length > 0 ? states[states.length - 1].version : null;
   const identityResolved = identity !== undefined;
   const incomeResolved = income !== undefined;
+  const bureauResolved = bureau !== undefined;
 
   const leadCopy = (() => {
-    if (incomeResolved && identityResolved) {
-      return 'Identidad e ingresos verificados. Próximos agentes pendientes.';
+    if (saga) {
+      return 'Solicitud terminada con saga ejecutada — los efectos colaterales fueron revertidos.';
+    }
+    if (bureauResolved) {
+      return 'Pipeline de verificación completo: identidad, ingresos y bureau.';
+    }
+    if (incomeResolved) {
+      return 'Identidad e ingresos verificados. Bureau pendiente.';
     }
     if (identityResolved) {
       return 'Identidad verificada. Ingresos pendientes — el agente de income no completó.';
@@ -97,6 +132,29 @@ export default async function ApplicationPage({ params }: PageProps) {
         <p className="lead">{leadCopy}</p>
         <hr className="hairline" />
       </header>
+
+      {saga && (
+        <aside
+          className="mt-10 border-l-2 border-[var(--accent)] bg-[var(--accent-wash)] px-6 py-4"
+          data-testid="saga-banner"
+        >
+          <div className="entry-meta mb-2">
+            <span className="cat">SAGA</span>
+            <span>·</span>
+            <span>{new Date(saga.completedAt).toISOString()}</span>
+          </div>
+          <p className="text-[var(--fg)]">
+            Solicitud abortada. El orquestador compensó{' '}
+            <span data-testid="saga-compensated">
+              {saga.compensated.join(', ')}
+            </span>
+            {' '}para revertir efectos colaterales.
+          </p>
+          <p className="text-[var(--fg-muted)] text-sm mt-1">
+            Razón: <span data-testid="saga-reason">{saga.reason}</span>
+          </p>
+        </aside>
+      )}
 
       <section
         className="mt-12 space-y-12"
@@ -204,6 +262,45 @@ export default async function ApplicationPage({ params }: PageProps) {
             >
               Pendiente. El IESS no devolvió afiliación activa para esta
               cédula en este intento.
+            </p>
+          )}
+        </article>
+
+        <hr className="hairline" />
+
+        <article data-testid="state-v3">
+          <div className="entry-meta mb-4">
+            <span className="cat">v3</span>
+            <span>·</span>
+            <span>BUREAU</span>
+            {v3 && (
+              <>
+                <span>·</span>
+                <span>{new Date(v3.createdAt).toISOString()}</span>
+              </>
+            )}
+          </div>
+          <h3 className="mb-4">Reporte crediticio</h3>
+          {bureau ? (
+            <dl className="grid grid-cols-2 gap-y-3 gap-x-8 text-[var(--fg)]">
+              <dt className="text-[var(--fg-muted)]">Score</dt>
+              <dd data-testid="bureau-score">{bureau.score}</dd>
+
+              <dt className="text-[var(--fg-muted)]">Hard inquiries</dt>
+              <dd data-testid="bureau-hard-inquiries">
+                {bureau.hardInquiriesCount}
+              </dd>
+
+              <dt className="text-[var(--fg-muted)]">Historial</dt>
+              <dd>{bureau.history.length} registros</dd>
+            </dl>
+          ) : (
+            <p
+              className="text-[var(--fg-muted)]"
+              data-testid="bureau-pending"
+            >
+              Pendiente. El bureau de crédito no devolvió un reporte para esta
+              solicitud.
             </p>
           )}
         </article>

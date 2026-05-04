@@ -25,6 +25,23 @@ export interface FullState {
     salary: number;
     monthsActive: number;
   };
+  bureau?: {
+    score: number;
+    history: Array<{ at: number; source: string }>;
+    hardInquiriesCount: number;
+  };
+
+  /**
+   * Reserved namespace owned by the orchestrator (not by an agent).
+   * Populated when a saga walk-back compensates one or more agents.
+   * The double-underscore prefix marks orchestrator metadata vs. agent
+   * contributions. See ADR-0005.
+   */
+  __saga?: {
+    compensated: string[];
+    reason: string;
+    completedAt: string;
+  };
 }
 
 export interface ExecCtx {

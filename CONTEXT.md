@@ -95,7 +95,13 @@ Limite hard de tokens (input + output) consumibles por una `Solicitud` completa.
 UUID generado client-side incluido en cada submit de solicitud. Constraint `UNIQUE` en DB previene duplicados ante doble-click o retries de red. Si llega un submit con un key ya procesado, el API devuelve la decision existente sin re-procesar.
 
 **Hard inquiry:**
-Efecto colateral simulado de `EquifaxMock.requestHardPull()`. Cada pull registra un hard inquiry en el estado interno del mock; los hard inquiries acumulados afectan el `score` en pulls futuros. Reversible via `compensate()` del agente `bureau` — esto es lo que hace que la saga sea **real, no teatral**.
+Efecto colateral simulado de `EquifaxMock.requestHardPull()`. Cada pull registra un hard inquiry en el estado interno in-memory del mock (Map<cedula, HardInquiry[]>). Persiste **entre solicitudes de la misma cedula durante el lifetime del proceso** — si la misma persona pide 3 creditos, su score acumula 3 penalties. Formula: `score = max(SCORE_FLOOR, baseScore − HARD_INQUIRY_PENALTY × count)`. Defaults: penalty 30, floor 300 (penalty mas alta que la realidad para que el efecto sea visible en demo en vivo — flippeable en `services/mocks/equifax/config.ts`). Reversible via `bureauAgent.compensate()` que llama `removeLastHardInquiry(cedula)` — esto es lo que hace que la saga sea **real, no teatral**. Ver ADR-0005.
+
+**Saga state row:**
+Cuando la saga walk-back ejecuta al menos un `compensate()`, el orchestrator escribe **una sola row adicional** en `application_states` con `created_by_agent='orchestrator'` y `contribution={ __saga: { compensated, reason, completedAt } }`. El doble-underscore `__saga` marca metadata del orchestrator (no contribucion de agente). `getLatestFullState` merge sin tratamiento especial — `state.__saga` queda como key top-level. Ver ADR-0005.
+
+**EquifaxMock:**
+Simula buro de credito. Modos: `happy`, `slow` (5s), `error_429`, `score_bajo`, `score_alto`. Devuelve `{ score, history, hardInquiriesCount }`. UNICO mock con side effect reversible — los demas (RegistroCivil, IESS, ScoreAlternativo) son read-only y sus `compensate()` son no-op. Vive en `src/services/mocks/equifax/`.
 
 **Razonamiento (streaming):**
 Eventos estructurados que un agente emite durante su ejecucion (NO son tokens del LLM streamed, son discretos): `{ agent, step, message }`. Llegan a la UI via SSE y se muestran en un panel lateral por nodo activo. Hace visible el "pensar en voz alta" del sistema.
@@ -108,8 +114,7 @@ Simula la API del Registro Civil de Ecuador para validar cedula. Devuelve nombre
 **IessMock:**
 Simula la API del IESS (seguridad social EC) para verificar afiliacion laboral, sueldo declarado, antiguedad. Modos: `happy`, `slow` (8s), `error_503`, `sin_afiliacion`. Devuelve `{ employer, salary, monthsActive }` o lanza `DomainError('sin_afiliacion')` cuando la persona es autónoma o fallecida. Breaker config tolerante (failureThreshold 7, timeoutMs 15s) — IESS es notoriamente lento. Vive en `src/services/mocks/iess/`.
 
-**EquifaxMock:**
-Simula buro de credito. Devuelve score, historial de pagos, deudas vigentes.
+**EquifaxMock:** ver entrada detallada arriba en "Hard inquiry" — UNICO mock con side effect reversible.
 
 **ScoreAlternativoMock:**
 Simula un servicio de scoring alternativo (sin reportar, basado en patrones de gasto sintetizados).
