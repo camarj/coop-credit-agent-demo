@@ -1,3 +1,5 @@
+import { ApplicationForm } from '@/components/application-form';
+
 export default function Home() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 md:py-24">
@@ -16,17 +18,12 @@ export default function Home() {
       </header>
 
       <section className="mt-12">
-        <p>
-          Este demo ilustra cómo construir un agente de IA confiable para
-          industrias reguladas: orchestrator central, estado inmutable
-          versionado, contratos en frontera con Zod, circuit breakers en cada
-          llamada externa y compensación tipo saga ante fallos.
+        <h2 className="mb-2">Nueva solicitud</h2>
+        <p className="mb-8 text-[var(--fg-muted)]">
+          Ingresá los datos del solicitante. Esta slice solo persiste la
+          solicitud — el procesamiento por agentes llega en slices siguientes.
         </p>
-        <p className="mt-6 text-[var(--fg-muted)]">
-          Slice 1 — bootstrap completo. El form de solicitud y el
-          procesamiento de la primera <span className="serif-italic">solicitud</span>{' '}
-          llegan en el siguiente commit, después del primer test rojo.
-        </p>
+        <ApplicationForm />
       </section>
     </main>
   );

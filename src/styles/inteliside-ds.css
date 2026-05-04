@@ -4,7 +4,13 @@
    Teal #2D9AA5 as primary accent (replaces Anthropic's clay).
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200..700;1,9..144,200..500&family=Geist:wght@100..700&family=Geist+Mono:wght@400;500&display=swap');
+/*
+ * Fonts (Fraunces, Geist, Geist Mono) are loaded via Next's font system
+ * in src/app/layout.tsx — the original Google Fonts @import from the
+ * skill is removed here to avoid CSS @import ordering issues with
+ * Tailwind v4. To refresh the design system from the canonical source,
+ * re-copy and re-strip this @import line.
+ */
 
 :root {
   /* ========== Brand primitives ========== */
