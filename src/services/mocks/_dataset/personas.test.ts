@@ -57,3 +57,30 @@ describe('master dataset — cedulasNotFound', () => {
     }
   });
 });
+
+describe('master dataset — IESS employment slice', () => {
+  it('has exactly 35 vivos with employment data and 5 without (autónomos)', () => {
+    const vivos = personas.filter((p) => p.deathDate === undefined);
+    const conEmpleo = vivos.filter((p) => p.employment !== undefined);
+    const sinEmpleo = vivos.filter((p) => p.employment === undefined);
+
+    expect(conEmpleo).toHaveLength(35);
+    expect(sinEmpleo).toHaveLength(5);
+  });
+
+  it('every fallecido has no employment record', () => {
+    const fallecidos = personas.filter((p) => p.deathDate !== undefined);
+    for (const p of fallecidos) {
+      expect(p.employment).toBeUndefined();
+    }
+  });
+
+  it('every employment entry has positive salary and monthsActive', () => {
+    const conEmpleo = personas.filter((p) => p.employment !== undefined);
+    for (const p of conEmpleo) {
+      expect(p.employment!.employer.length).toBeGreaterThan(0);
+      expect(p.employment!.salary).toBeGreaterThan(0);
+      expect(p.employment!.monthsActive).toBeGreaterThan(0);
+    }
+  });
+});

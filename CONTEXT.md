@@ -106,7 +106,7 @@ Eventos estructurados que un agente emite durante su ejecucion (NO son tokens de
 Simula la API del Registro Civil de Ecuador para validar cedula. Devuelve nombres, fecha de nacimiento, lugar de nacimiento.
 
 **IessMock:**
-Simula la API del IESS (seguridad social EC) para verificar afiliacion laboral, sueldo declarado, antiguedad.
+Simula la API del IESS (seguridad social EC) para verificar afiliacion laboral, sueldo declarado, antiguedad. Modos: `happy`, `slow` (8s), `error_503`, `sin_afiliacion`. Devuelve `{ employer, salary, monthsActive }` o lanza `DomainError('sin_afiliacion')` cuando la persona es autónoma o fallecida. Breaker config tolerante (failureThreshold 7, timeoutMs 15s) — IESS es notoriamente lento. Vive en `src/services/mocks/iess/`.
 
 **EquifaxMock:**
 Simula buro de credito. Devuelve score, historial de pagos, deudas vigentes.

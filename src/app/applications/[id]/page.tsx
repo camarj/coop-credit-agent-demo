@@ -25,6 +25,14 @@ interface IdentityContribution {
   };
 }
 
+interface IncomeContribution {
+  income: {
+    employer: string;
+    salary: number;
+    monthsActive: number;
+  };
+}
+
 export default async function ApplicationPage({ params }: PageProps) {
   const { id } = await params;
 
@@ -55,8 +63,23 @@ export default async function ApplicationPage({ params }: PageProps) {
   const identityContribution = v1?.contribution as IdentityContribution | undefined;
   const identity = identityContribution?.identity;
 
+  const v2 = states.find((s) => s.version === 2);
+  const incomeContribution = v2?.contribution as IncomeContribution | undefined;
+  const income = incomeContribution?.income;
+
   const latestVersion = states.length > 0 ? states[states.length - 1].version : null;
   const identityResolved = identity !== undefined;
+  const incomeResolved = income !== undefined;
+
+  const leadCopy = (() => {
+    if (incomeResolved && identityResolved) {
+      return 'Identidad e ingresos verificados. Próximos agentes pendientes.';
+    }
+    if (identityResolved) {
+      return 'Identidad verificada. Ingresos pendientes — el agente de income no completó.';
+    }
+    return 'Identidad pendiente — el agente de identidad no completó.';
+  })();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 md:py-24">
@@ -71,11 +94,7 @@ export default async function ApplicationPage({ params }: PageProps) {
           </span>
         </div>
         <h1>Solicitud recibida</h1>
-        <p className="lead">
-          {identityResolved
-            ? 'Identidad verificada contra Registro Civil. Próximos agentes pendientes.'
-            : 'Identidad pendiente — el agente de identidad no completó.'}
-        </p>
+        <p className="lead">{leadCopy}</p>
         <hr className="hairline" />
       </header>
 
@@ -146,6 +165,45 @@ export default async function ApplicationPage({ params }: PageProps) {
             >
               Pendiente. La cédula no se pudo verificar contra Registro Civil
               en este intento.
+            </p>
+          )}
+        </article>
+
+        <hr className="hairline" />
+
+        <article data-testid="state-v2">
+          <div className="entry-meta mb-4">
+            <span className="cat">v2</span>
+            <span>·</span>
+            <span>INCOME</span>
+            {v2 && (
+              <>
+                <span>·</span>
+                <span>{new Date(v2.createdAt).toISOString()}</span>
+              </>
+            )}
+          </div>
+          <h3 className="mb-4">Ingresos verificados</h3>
+          {income ? (
+            <dl className="grid grid-cols-2 gap-y-3 gap-x-8 text-[var(--fg)]">
+              <dt className="text-[var(--fg-muted)]">Empleador</dt>
+              <dd data-testid="income-employer">{income.employer}</dd>
+
+              <dt className="text-[var(--fg-muted)]">Sueldo IESS (USD)</dt>
+              <dd data-testid="income-salary">USD {income.salary}</dd>
+
+              <dt className="text-[var(--fg-muted)]">Antigüedad</dt>
+              <dd data-testid="income-months-active">
+                {income.monthsActive} meses
+              </dd>
+            </dl>
+          ) : (
+            <p
+              className="text-[var(--fg-muted)]"
+              data-testid="income-pending"
+            >
+              Pendiente. El IESS no devolvió afiliación activa para esta
+              cédula en este intento.
             </p>
           )}
         </article>

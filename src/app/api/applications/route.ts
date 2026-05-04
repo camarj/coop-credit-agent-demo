@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
+import { eq, desc } from 'drizzle-orm';
 import { intakeService } from '@/services/intake';
 import { runOrchestrator } from '@/orchestrator';
 import { ConsoleTracer } from '@/lib/tracer';
 import { OperationalError, DomainError } from '@/lib/errors';
+import { db } from '@/db/client';
+import { applicationStates } from '@/db/schema';
 
 const tracer = new ConsoleTracer();
+
+async function readLatestVersion(applicationId: string): Promise<number> {
+  const [row] = await db
+    .select({ version: applicationStates.version })
+    .from(applicationStates)
+    .where(eq(applicationStates.applicationId, applicationId))
+    .orderBy(desc(applicationStates.version))
+    .limit(1);
+  return row?.version ?? 0;
+}
 
 export async function POST(request: Request): Promise<Response> {
   let body: unknown;
@@ -34,13 +47,15 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     await runOrchestrator(applicationId, { tracer });
-    return NextResponse.json({ applicationId, version: 1 });
+    const version = await readLatestVersion(applicationId);
+    return NextResponse.json({ applicationId, version });
   } catch (err) {
-    // Application stays at v0; the page will render whatever exists.
-    // Return 200 with applicationId so the client navigates to the state page,
-    // where the failure is visible (last version < expected).
+    // Pipeline halted mid-flight (Operational or Domain error). Application
+    // is left at whatever version was last successfully persisted; client
+    // navigates to the state page where the gap is visible.
     if (err instanceof OperationalError || err instanceof DomainError) {
-      return NextResponse.json({ applicationId, version: 0 });
+      const version = await readLatestVersion(applicationId);
+      return NextResponse.json({ applicationId, version });
     }
     return NextResponse.json({ error: 'internal_error' }, { status: 500 });
   }
