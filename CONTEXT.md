@@ -41,11 +41,15 @@ Un componente con responsabilidad unica que recibe estado, hace su trabajo y pro
 _Avoid:_ servicio, modulo, worker
 
 **Orchestrator:**
-El componente central que coordina la secuencia de agentes. Mantiene el grafo de ejecucion. Es la unica entidad con vision completa del flujo. Implementado con LangGraph.js.
+El componente central que coordina la secuencia de agentes. Mantiene el grafo de ejecucion. Es la unica entidad con vision completa del flujo. Implementado con LangGraph.js. **Arranca con state v0 ya creado por `IntakeService`** y ejecuta el grafo desde v1 en adelante. Cuando dos agentes corren en branches paralelas (fan-out), LangGraph maneja el join — sus contribuciones viven en namespaces distintos y no colisionan.
 _Avoid:_ coordinator, manager, controller
 
 **Estado (state):**
-Un snapshot inmutable de la solicitud en un punto del flujo. Cada agente produce un nuevo estado, nunca modifica uno existente. Tiene `version`, `created_by_agent`, `created_at`, `data`.
+Un snapshot inmutable de la solicitud en un punto del flujo. Cada agente produce un nuevo estado, nunca modifica uno existente. Tiene `version`, `created_by_agent`, `created_at`, `contribution`.
+
+**Cada row guarda SOLO la `contribution` del agente que la produjo — nunca el FullState reconstruido.** El `FullState` (estado completo merged) se reconstruye via `getLatestFullState()` haciendo `reduce` sobre todas las versions con spread. Cada agente que no es `intake` namespacea su contribution bajo su nombre — ej. `identity` escribe `{ identity: { name, birthDate, valid } }`. Esto previene colisiones entre agentes que tienen campos con el mismo nombre (ej. `bureau.score` vs `altScore.score`).
+
+`intake` es excepcion documentada: escribe sus 4 campos flat (`{ cedula, ingresos, monto, plazo }`) porque son los datos primarios crudos de la solicitud, no la contribucion de un agente.
 _Avoid:_ contexto (es ambiguo), payload
 
 **Trace:**
@@ -61,6 +65,16 @@ La secuencia ordenada de `compensate()` calls que el orchestrator ejecuta cuando
 **Circuit breaker:**
 El componente que envuelve llamadas a servicios externos (mocks). Tiene 3 estados: `CLOSED` (normal), `OPEN` (falla, no llama, falla rapido), `HALF_OPEN` (despues de cooldown, prueba con 1 request).
 _Avoid:_ disyuntor (en codigo en ingles)
+
+**IntakeService:**
+Factory que recibe el body del `POST /api/applications`, valida con Zod, persiste `applications` + state v0 en una sola transaccion Postgres, y devuelve `applicationId`. **NO es un agente** y NO es un nodo del grafo — el orchestrator se invoca despues de que intake completa, partiendo de v0 ya persistido. Si intake falla, el rollback es transaccional (Postgres), no saga compensation. Vive en `src/services/intake/`.
+_Avoid:_ intakeAgent (deprecated), intake node
+
+**OperationalError:**
+Error que indica falla operacional del servicio externo: timeout, error 5xx, conexion de red caida. **Cuenta para el contador del circuit breaker.** El wrapper `withCircuitBreaker` lo lanza cuando el breaker esta `OPEN` (fail-fast sin intentar) o cuando un timeout dispara — siempre via clase explicita, no propaga el error original del mock al expirar.
+
+**DomainError:**
+Error semantico del dominio: cedula no existe, score insuficiente, recurso no encontrado. **NO cuenta para el breaker** — el servicio respondio correctamente, solo que la respuesta es un "no". Pasa transparente al caller via `withCircuitBreaker`.
 
 **Tool:**
 Una funcion que un agente LLM puede invocar. Tiene schema Zod estricto para input y output. NO confundir con "agente" — un agente puede usar varios tools.

@@ -15,7 +15,7 @@ async function seedApplication() {
       applicationId: app.id,
       version: 0,
       createdByAgent: 'test',
-      data: { seed: true },
+      contribution: { seed: true },
     })
     .returning();
   return { app, state };
@@ -51,7 +51,7 @@ describe('immutability triggers — application_states', () => {
 
     await expect(
       db.execute(
-        sql`UPDATE application_states SET data = '{"mutated": true}'::jsonb WHERE id = ${state.id}::uuid`,
+        sql`UPDATE application_states SET contribution = '{"mutated": true}'::jsonb WHERE id = ${state.id}::uuid`,
       ),
     ).rejects.toMatchObject({
       cause: { message: expect.stringMatching(/immutable/) },

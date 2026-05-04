@@ -2,13 +2,18 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { POST } from './route';
 import { closeDb, resetDb } from '@/db/test-helpers';
 import { db } from '@/db/client';
-import { applications } from '@/db/schema';
+import { applications, applicationStates } from '@/db/schema';
+import { __resetForTesting } from '@/services/mocks/registro-civil';
+import { personas, cedulasNotFound } from '@/services/mocks/_dataset/personas';
 
-beforeEach(resetDb);
+beforeEach(async () => {
+  await resetDb();
+  __resetForTesting();
+});
 afterAll(closeDb);
 
 const validInput = {
-  cedula: '1712345678',
+  cedula: personas[0].cedula,
   ingresos: 1500,
   monto: 3000,
   plazo: 24,
@@ -23,17 +28,35 @@ function buildRequest(body: unknown): Request {
 }
 
 describe('POST /api/applications', () => {
-  it('returns 200 with applicationId + version=0 for valid input', async () => {
+  it('returns 200 with version=1 when cedula is in dataset (intake + identity succeed)', async () => {
     const response = await POST(buildRequest(validInput));
 
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(typeof json.applicationId).toBe('string');
-    expect(json.version).toBe(0);
+    expect(json.version).toBe(1);
 
     const apps = await db.select().from(applications);
     expect(apps).toHaveLength(1);
     expect(apps[0].id).toBe(json.applicationId);
+
+    const states = await db.select().from(applicationStates);
+    expect(states).toHaveLength(2);
+  });
+
+  it('returns 200 with version=0 when cedula is not in dataset (intake ok, identity DomainError)', async () => {
+    const response = await POST(
+      buildRequest({ ...validInput, cedula: cedulasNotFound[0] }),
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.applicationId).toBeDefined();
+    expect(json.version).toBe(0);
+
+    const states = await db.select().from(applicationStates);
+    expect(states).toHaveLength(1);
+    expect(states[0].version).toBe(0);
   });
 
   it('returns 400 when cedula is invalid', async () => {

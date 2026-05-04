@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { db } from '@/db/client';
 import { applications, applicationStates } from '@/db/schema';
 import { closeDb, resetDb } from '@/db/test-helpers';
-import { intakeAgent } from '@/agents/intake';
+import { intakeService } from '@/services/intake';
 import { RecordingTracer } from '@/lib/tracer';
 
 beforeEach(async () => {
@@ -20,11 +20,11 @@ const validInput = {
   plazo: 24,
 };
 
-describe('intakeAgent.execute — happy path', () => {
+describe('intakeService.execute — happy path', () => {
   it('persists an application row and a state v0 in the same transaction', async () => {
     const tracer = new RecordingTracer();
 
-    const state = await intakeAgent.execute(validInput, { tracer });
+    const state = await intakeService.execute(validInput, { tracer });
 
     const apps = await db.select().from(applications);
     const states = await db.select().from(applicationStates);
@@ -35,16 +35,16 @@ describe('intakeAgent.execute — happy path', () => {
     expect(states[0].applicationId).toBe(apps[0].id);
     expect(states[0].version).toBe(0);
     expect(states[0].createdByAgent).toBe('intake');
-    expect(states[0].data).toEqual(validInput);
+    expect(states[0].contribution).toEqual(validInput);
 
     expect(state.applicationId).toBe(apps[0].id);
     expect(state.version).toBe(0);
     expect(state.createdByAgent).toBe('intake');
-    expect(state.data).toEqual(validInput);
+    expect(state.contribution).toEqual(validInput);
   });
 });
 
-describe('intakeAgent.execute — invalid input', () => {
+describe('intakeService.execute — invalid input', () => {
   it('throws ZodError and writes no rows when input is invalid', async () => {
     const tracer = new RecordingTracer();
     const invalid = {
@@ -55,7 +55,7 @@ describe('intakeAgent.execute — invalid input', () => {
     };
 
     await expect(
-      intakeAgent.execute(invalid, { tracer }),
+      intakeService.execute(invalid, { tracer }),
     ).rejects.toThrow();
 
     const apps = await db.select().from(applications);
@@ -69,7 +69,7 @@ describe('intakeAgent.execute — invalid input', () => {
     const tracer = new RecordingTracer();
 
     await expect(
-      intakeAgent.execute({ ...validInput, monto: 50 }, { tracer }),
+      intakeService.execute({ ...validInput, monto: 50 }, { tracer }),
     ).rejects.toThrow();
 
     const apps = await db.select().from(applications);
@@ -77,11 +77,11 @@ describe('intakeAgent.execute — invalid input', () => {
   });
 });
 
-describe('intakeAgent.execute — observability', () => {
+describe('intakeService.execute — observability', () => {
   it('emits intake.start and intake.complete events on a single span', async () => {
     const tracer = new RecordingTracer();
 
-    await intakeAgent.execute(validInput, { tracer });
+    await intakeService.execute(validInput, { tracer });
 
     expect(tracer.spans).toHaveLength(1);
     const span = tracer.spans[0];
@@ -97,19 +97,19 @@ describe('intakeAgent.execute — observability', () => {
   it('records applicationId and version as span attributes', async () => {
     const tracer = new RecordingTracer();
 
-    const state = await intakeAgent.execute(validInput, { tracer });
+    const state = await intakeService.execute(validInput, { tracer });
 
     const span = tracer.spans[0];
     expect(span.attributes.applicationId).toBe(state.applicationId);
     expect(span.attributes.version).toBe(0);
-    expect(span.attributes.agent).toBe('intake');
+    expect(span.attributes.service).toBe('intake');
   });
 
   it('marks the span as error and writes no rows when validation fails', async () => {
     const tracer = new RecordingTracer();
 
     await expect(
-      intakeAgent.execute({ cedula: 'BAD' }, { tracer }),
+      intakeService.execute({ cedula: 'BAD' }, { tracer }),
     ).rejects.toThrow();
 
     expect(tracer.spans).toHaveLength(1);

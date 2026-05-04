@@ -3,28 +3,33 @@ import { applications, applicationStates } from '@/db/schema';
 import type { Tracer } from '@/lib/tracer';
 import { intakeInputSchema, type IntakeInput } from './schema';
 
-export interface AgentContext {
+export interface ServiceContext {
   tracer: Tracer;
 }
 
-export interface IntakeAgentOutput {
+export interface IntakeServiceOutput {
   applicationId: string;
   version: number;
   createdByAgent: 'intake';
-  data: IntakeInput;
+  contribution: IntakeInput;
 }
 
-export const intakeAgent = {
+/**
+ * IntakeService is the factory that creates an Application + state v0.
+ * It is NOT a graph node — the orchestrator runs after intake completes,
+ * starting from state v0 already persisted. See ADR-0004.
+ */
+export const intakeService = {
   name: 'intake' as const,
   inputSchema: intakeInputSchema,
 
   async execute(
     input: unknown,
-    ctx: AgentContext,
-  ): Promise<IntakeAgentOutput> {
+    ctx: ServiceContext,
+  ): Promise<IntakeServiceOutput> {
     return ctx.tracer.span(
       'intake.execute',
-      { agent: 'intake' },
+      { service: 'intake' },
       async (span) => {
         span.addEvent('intake.start');
 
@@ -42,7 +47,7 @@ export const intakeAgent = {
               applicationId: app.id,
               version: 0,
               createdByAgent: 'intake',
-              data: validated,
+              contribution: validated,
             })
             .returning();
 
@@ -50,7 +55,7 @@ export const intakeAgent = {
             applicationId: app.id,
             version: state.version,
             createdByAgent: 'intake' as const,
-            data: validated,
+            contribution: validated,
           };
         });
 

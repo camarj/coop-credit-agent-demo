@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { intakeInputSchema } from '@/agents/intake';
+import { intakeInputSchema } from '@/services/intake';
 
 describe('intakeInputSchema — cedula', () => {
   const validRest = { ingresos: 1500, monto: 3000, plazo: 24 };

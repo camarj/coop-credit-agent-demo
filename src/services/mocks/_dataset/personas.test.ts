@@ -1,0 +1,59 @@
+import { describe, it, expect } from 'vitest';
+import { isValidCedula } from './cedula';
+import { personas, cedulasNotFound } from './personas';
+
+describe('master dataset — personas', () => {
+  it('has 45 personas (40 alive + 5 fallecidos)', () => {
+    expect(personas).toHaveLength(45);
+
+    const fallecidos = personas.filter((p) => p.deathDate !== undefined);
+    expect(fallecidos).toHaveLength(5);
+
+    const vivos = personas.filter((p) => p.deathDate === undefined);
+    expect(vivos).toHaveLength(40);
+  });
+
+  it('every persona has a valid Ecuadorian cedula checksum', () => {
+    for (const p of personas) {
+      expect(
+        isValidCedula(p.cedula),
+        `Invalid cedula in dataset: ${p.cedula} (${p.name})`,
+      ).toBe(true);
+    }
+  });
+
+  it('every persona has non-empty name and ISO birthDate', () => {
+    for (const p of personas) {
+      expect(p.name.length).toBeGreaterThan(0);
+      expect(p.birthDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it('fallecidos have ISO deathDate after birthDate', () => {
+    const fallecidos = personas.filter((p) => p.deathDate !== undefined);
+    for (const p of fallecidos) {
+      expect(p.deathDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(p.deathDate! > p.birthDate).toBe(true);
+    }
+  });
+
+  it('cedulas are all unique within personas', () => {
+    const set = new Set(personas.map((p) => p.cedula));
+    expect(set.size).toBe(personas.length);
+  });
+});
+
+describe('master dataset — cedulasNotFound', () => {
+  it('has exactly 5 cedulas, all valid checksum, none in personas', () => {
+    expect(cedulasNotFound).toHaveLength(5);
+
+    for (const c of cedulasNotFound) {
+      expect(isValidCedula(c)).toBe(true);
+    }
+
+    const personasCedulas = new Set(personas.map((p) => p.cedula));
+    for (const c of cedulasNotFound) {
+      expect(personasCedulas.has(c)).toBe(false);
+    }
+  });
+});
