@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "../styles/inteliside-ds.css";
+
+/*
+ * Tailwind v4 theme bridges to Inteliside Design System v2 (light only).
+ * Authoritative tokens live in src/styles/inteliside-ds.css.
+ */
+@theme {
+  --color-bg: #F5F1EB;
+  --color-bg-elevated: #FAF7F2;
+  --color-bg-subtle: #EDE8DE;
+  --color-fg: #141210;
+  --color-fg-muted: #4A453D;
+  --color-fg-subtle: #7A7366;
+  --color-fg-inverse: #FAF7F2;
+  --color-accent: #2D9AA5;
+  --color-accent-hover: #268590;
+
+  --font-serif: var(--font-serif), "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+}
+
+html {
+  background: var(--color-bg);
+  color: var(--color-fg);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.6;
+}
