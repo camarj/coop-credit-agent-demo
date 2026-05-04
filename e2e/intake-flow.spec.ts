@@ -10,7 +10,7 @@ const AUTONOMO_CEDULA = '1250000054';
 const FALLECIDO_CEDULA = '1740000060';
 const NOT_FOUND_CEDULA = '2230000073';
 
-test('happy path — full pipeline produces v0, v1 (identity), v2 (income)', async ({
+test('happy path — full pipeline produces v0, v1 (identity), v2 (income), v3 (bureau)', async ({
   page,
 }) => {
   await page.goto('/');
@@ -23,7 +23,7 @@ test('happy path — full pipeline produces v0, v1 (identity), v2 (income)', asy
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
-  await expect(page.getByTestId('latest-version')).toHaveText('v2');
+  await expect(page.getByTestId('latest-version')).toHaveText('v3');
 
   // v0
   await expect(page.getByTestId('data-cedula')).toHaveText(
@@ -41,6 +41,13 @@ test('happy path — full pipeline produces v0, v1 (identity), v2 (income)', asy
   await expect(page.getByTestId('income-employer')).toHaveText('Banco Pichincha');
   await expect(page.getByTestId('income-salary')).toHaveText('USD 1450');
   await expect(page.getByTestId('income-months-active')).toHaveText('84 meses');
+
+  // v3 — bureau: baseScore 720 minus 1 inquiry × 30 = 690
+  await expect(page.getByTestId('bureau-score')).toHaveText('690');
+  await expect(page.getByTestId('bureau-hard-inquiries')).toHaveText('1');
+
+  // No saga banner on happy path
+  await expect(page.getByTestId('saga-banner')).not.toBeVisible();
 });
 
 test('autónomo — identity ok, income halts at sin_afiliacion (state stays at v1)', async ({
