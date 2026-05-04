@@ -165,6 +165,22 @@ Todas las skills viven directamente bajo `.claude/skills/{nombre}/SKILL.md`.
 
 ---
 
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues en `camarj/coop-credit-agent-demo` via la CLI `gh`. Ver `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Cinco labels canonicas (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) creadas en GitHub. Ver `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` en la raiz, ADRs en `docs/adr/`. Ver `docs/agents/domain.md`.
+
+---
+
 ## Estado actual del proyecto
 
 **Setup inicial completado.** Pendiente:
@@ -172,8 +188,7 @@ Todas las skills viven directamente bajo `.claude/skills/{nombre}/SKILL.md`.
 1. Sesion `grill-me` con Raul para definir alcance del MVP
 2. Crear PRD inicial con `/to-prd`
 3. Romper en issues con `/to-issues`
-4. Decidir: GitHub Issues vs Linear vs `.scratch/` para issue tracker (Pocock recomienda configurarlo con `/setup-matt-pocock-skills`)
-5. Primera vertical slice: solicitud minima → identidad mock → bureau mock → decision basica con UI
+4. Primera vertical slice: solicitud minima → identidad mock → bureau mock → decision basica con UI
 
 ---
 
