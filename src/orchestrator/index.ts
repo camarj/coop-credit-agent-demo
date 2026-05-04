@@ -4,6 +4,7 @@ import {
   persistContribution,
 } from '@/db/repository';
 import { identityAgent } from '@/agents/identity';
+import { incomeAgent } from '@/agents/income';
 
 /**
  * Runs a single agent: read FullState → select → validate input → execute
@@ -27,9 +28,9 @@ async function runAgent<TInput, TOutput>(
 }
 
 /**
- * Slice 2 orchestrator: linear sequence intake → identity. State v0 must
- * exist before this runs (created by IntakeService). LangGraph integration
- * arrives in slice 3 when fan-out branches show up.
+ * Slice 3 orchestrator: linear sequence intake → identity → income. State v0
+ * must exist before this runs (created by IntakeService). LangGraph
+ * integration arrives in slice 5 with the alt-score parallel branch.
  */
 export async function runOrchestrator(
   applicationId: string,
@@ -41,6 +42,7 @@ export async function runOrchestrator(
     async (span) => {
       span.addEvent('orchestrator.start');
       await runAgent(identityAgent, applicationId, 1, ctx);
+      await runAgent(incomeAgent, applicationId, 2, ctx);
       span.addEvent('orchestrator.complete');
     },
   );

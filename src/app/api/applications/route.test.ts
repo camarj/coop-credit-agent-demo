@@ -28,20 +28,20 @@ function buildRequest(body: unknown): Request {
 }
 
 describe('POST /api/applications', () => {
-  it('returns 200 with version=1 when cedula is in dataset (intake + identity succeed)', async () => {
+  it('returns 200 with version=2 when full pipeline succeeds (intake + identity + income)', async () => {
     const response = await POST(buildRequest(validInput));
 
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(typeof json.applicationId).toBe('string');
-    expect(json.version).toBe(1);
+    expect(json.version).toBe(2);
 
     const apps = await db.select().from(applications);
     expect(apps).toHaveLength(1);
     expect(apps[0].id).toBe(json.applicationId);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(2);
+    expect(states).toHaveLength(3);
   });
 
   it('returns 200 with version=0 when cedula is not in dataset (intake ok, identity DomainError)', async () => {

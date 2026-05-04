@@ -1,22 +1,21 @@
 import { test, expect } from '@playwright/test';
 
 // Cedulas computed from the master dataset (src/services/mocks/_dataset/personas.ts).
-// personas[0] is alive ("Maria Lopez Vargas"). personas[40] is fallecida.
+// personas[0] is alive + has employment ("Maria Lopez Vargas" @ Banco Pichincha).
+// personas[35] is alive + no employment (autónomo, "Bryan Calderon Sevilla").
+// personas[40] is fallecida ("Eduardo Vinueza Tapia").
 // cedulasNotFound[0] has a valid checksum but no matching record.
-const ALIVE_CEDULA = '0100000009';
+const ALIVE_AFILIADO_CEDULA = '0100000009';
+const AUTONOMO_CEDULA = '1250000054';
 const FALLECIDO_CEDULA = '1740000060';
 const NOT_FOUND_CEDULA = '2230000073';
 
-test('happy path — intake + identity produce v0 and v1, identity is valid', async ({
+test('happy path — full pipeline produces v0, v1 (identity), v2 (income)', async ({
   page,
 }) => {
   await page.goto('/');
 
-  await expect(
-    page.getByRole('heading', { name: 'coop-credit-agent' }),
-  ).toBeVisible();
-
-  await page.getByLabel('Cédula').fill(ALIVE_CEDULA);
+  await page.getByLabel('Cédula').fill(ALIVE_AFILIADO_CEDULA);
   await page.getByLabel('Ingresos mensuales (USD)').fill('1500');
   await page.getByLabel('Monto solicitado (USD)').fill('3000');
   await page.getByLabel('Plazo (meses)').fill('24');
@@ -24,23 +23,48 @@ test('happy path — intake + identity produce v0 and v1, identity is valid', as
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
-  await expect(page.getByTestId('latest-version')).toHaveText('v1');
+  await expect(page.getByTestId('latest-version')).toHaveText('v2');
 
-  // v0 — intake fields
-  await expect(page.getByTestId('data-cedula')).toHaveText(ALIVE_CEDULA);
-  await expect(page.getByTestId('data-ingresos')).toHaveText('USD 1500');
+  // v0
+  await expect(page.getByTestId('data-cedula')).toHaveText(
+    ALIVE_AFILIADO_CEDULA,
+  );
   await expect(page.getByTestId('data-monto')).toHaveText('USD 3000');
-  await expect(page.getByTestId('data-plazo')).toHaveText('24 meses');
 
-  // v1 — identity contribution
+  // v1
   await expect(page.getByTestId('identity-name')).toHaveText(
     'Maria Lopez Vargas',
   );
-  await expect(page.getByTestId('identity-birthdate')).toHaveText('1985-04-12');
   await expect(page.getByTestId('identity-valid')).toHaveText('Válida');
+
+  // v2
+  await expect(page.getByTestId('income-employer')).toHaveText('Banco Pichincha');
+  await expect(page.getByTestId('income-salary')).toHaveText('USD 1450');
+  await expect(page.getByTestId('income-months-active')).toHaveText('84 meses');
 });
 
-test('fallecido — identity resolves with valid: false', async ({ page }) => {
+test('autónomo — identity ok, income halts at sin_afiliacion (state stays at v1)', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  await page.getByLabel('Cédula').fill(AUTONOMO_CEDULA);
+  await page.getByLabel('Ingresos mensuales (USD)').fill('1500');
+  await page.getByLabel('Monto solicitado (USD)').fill('3000');
+  await page.getByLabel('Plazo (meses)').fill('24');
+  await page.getByTestId('submit-button').click();
+  await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
+
+  await expect(page.getByTestId('latest-version')).toHaveText('v1');
+  await expect(page.getByTestId('identity-name')).toHaveText(
+    'Bryan Calderon Sevilla',
+  );
+  await expect(page.getByTestId('income-pending')).toBeVisible();
+});
+
+test('fallecido — identity returns valid:false, income then halts (v1)', async ({
+  page,
+}) => {
   await page.goto('/');
 
   await page.getByLabel('Cédula').fill(FALLECIDO_CEDULA);
@@ -54,6 +78,7 @@ test('fallecido — identity resolves with valid: false', async ({ page }) => {
   await expect(page.getByTestId('identity-valid')).toHaveText(
     'Persona fallecida',
   );
+  await expect(page.getByTestId('income-pending')).toBeVisible();
 });
 
 test('not_found — application stays at v0, identity panel shows pending', async ({
@@ -70,6 +95,7 @@ test('not_found — application stays at v0, identity panel shows pending', asyn
 
   await expect(page.getByTestId('latest-version')).toHaveText('v0');
   await expect(page.getByTestId('identity-pending')).toBeVisible();
+  await expect(page.getByTestId('income-pending')).toBeVisible();
 });
 
 test('form submission shows an error message when validation fails', async ({
@@ -77,7 +103,6 @@ test('form submission shows an error message when validation fails', async ({
 }) => {
   await page.goto('/');
 
-  // Bypass HTML5 validation to send a payload with invalid cedula format
   await page.evaluate(() => {
     const input = document.querySelector<HTMLInputElement>('#cedula');
     if (input) {

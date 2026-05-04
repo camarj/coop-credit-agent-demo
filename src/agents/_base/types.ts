@@ -20,6 +20,11 @@ export interface FullState {
     birthDate: string;
     valid: boolean;
   };
+  income?: {
+    employer: string;
+    salary: number;
+    monthsActive: number;
+  };
 }
 
 export interface ExecCtx {

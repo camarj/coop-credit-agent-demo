@@ -56,3 +56,6 @@ postgres-data/
 .vercel/
 test-results/
 playwright-report/
+
+# Local scratch (screenshots, exploratory dumps)
+.tmp/
