@@ -5,6 +5,10 @@ export const intakeInputSchema = z.object({
     .string()
     .regex(/^\d{10}$/)
     .describe('Cedula ecuatoriana de 10 digitos'),
+  ingresos: z
+    .number()
+    .positive()
+    .describe('Ingresos mensuales declarados en USD'),
   monto: z
     .number()
     .min(100)

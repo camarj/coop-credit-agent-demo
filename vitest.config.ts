@@ -11,6 +11,10 @@ export default defineConfig({
     environment: 'node',
     globals: false,
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    setupFiles: ['./vitest.setup.ts'],
+    // Integration tests share the same Postgres; run files serially to avoid
+    // cross-file truncation races.
+    fileParallelism: false,
     coverage: {
       reporter: ['text', 'html'],
     },
