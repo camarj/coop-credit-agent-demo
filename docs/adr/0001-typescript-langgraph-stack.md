@@ -79,22 +79,47 @@ El proyecto necesita un stack para construir un demo multi-agente de produccion 
 
 | Capa | Tecnologia |
 |---|---|
-| Lenguaje | TypeScript 5.x |
+| Lenguaje | TypeScript 5.x (Node 22 LTS, fijado en `.nvmrc` + `engines`) |
+| Package manager | pnpm (fijado en `packageManager` de `package.json`) |
 | Frontend | Next.js 15 (App Router) + React 19 |
 | UI components | Tailwind + shadcn/ui |
 | Orchestration | LangGraph.js |
 | LLM client | Anthropic SDK (Claude) |
 | Schemas | Zod |
-| ORM | Drizzle |
-| Database | Postgres 16 (local Docker, prod Supabase o Neon) |
-| Vector store | pgvector (mismo Postgres) |
+| ORM | **Drizzle** (decidido) |
+| Database local | Postgres 16 via Docker Compose, imagen `pgvector/pgvector:pg16` (pgvector pre-cargado) |
+| Database cloud | **Neon** (decidido) — branching nativo + integracion Vercel + sin features sobrantes |
+| Postgres driver | `pg` standard via pooled connection (`-pooler` hostname). `@neondatabase/serverless` queda nota para v2 si alguna route migra a edge runtime |
+| Vector store | pgvector en mismo Postgres (mismo image local + Neon lo soporta out-of-box) |
+| Migrations | `drizzle-kit` con archivos en `db/migrations/` versionados en git, apply via `pnpm db:migrate` |
 | Tracing | Langfuse (cloud free tier) |
 | Tests | Vitest + Playwright |
+| Test DB | Mismo Postgres local con truncate entre tests (no testcontainers en slices iniciales) |
 | E2E env | Docker Compose |
-| Deploy | Vercel (UI + API) + Supabase/Neon (DB) |
+| Estructura del repo | Single Next.js project (no monorepo, no turborepo) |
+| Deploy | Vercel (UI + API) + Neon (DB con branch por PR via integration) |
 
-## Open questions
+## Decisiones de open questions
 
-- Drizzle vs Prisma — pendiente de decision en grilling. Default Drizzle por TS-firstness y por ser el que Raul usa en otros proyectos.
-- Supabase vs Neon — pendiente. Default Supabase por familiaridad y por features extra (storage, realtime).
-- Vercel AI SDK como capa adicional, o llamar Anthropic SDK directo — pendiente. Default: Anthropic SDK directo para no agregar abstraccion innecesaria, salvo que necesitemos features especificos del Vercel AI SDK (streaming, tool calling helpers).
+### Drizzle vs Prisma → **Drizzle**
+
+Razones:
+- TS-first sin codegen pesado — flujo iterativo se mantiene rapido sin "esperar codegen" entre cambios de schema
+- SQL-like queries — apropiado para una tabla append-only donde queremos visibilidad sobre que SQL se ejecuta. Futuro lector entiende la consulta sin abrir docs
+- Migrations son SQL planos — permite enforce del invariante append-only via trigger en migration explicita (rechaza UPDATE en `application_states`)
+- `drizzle-kit studio` como herramienta pedagogica de demo: en webinar se abre Studio en pestana y se ve `application_states` creciendo en tiempo real
+
+### Supabase vs Neon → **Neon**
+
+Razones:
+- Branching nativo: una rama de DB por PR/preview deploy, encaja con flujo de vertical slices Pocock — cada slice se prueba contra DB real aislada antes de mergear
+- Integracion oficial Vercel ↔ Neon provisiona branches automaticamente por preview, cero setup manual
+- Ningun feature de Supabase nos servia: no hay auth (es demo), no hay storage, no hay realtime (usamos SSE propio para el grafo), no hay edge functions. Pagar peso conceptual de Supabase para usar solo Postgres = overkill
+- `pgvector` disponible out-of-box
+- Free tier generoso para demo publico
+
+**Trade-off conocido:** cold starts de Neon (~sub-segundo en primer request despues de inactividad). Mitigar con warmup ping antes de sesiones de pitch. No es bloqueante.
+
+### Vercel AI SDK vs Anthropic SDK directo → **PENDIENTE**
+
+No bloquea las primeras slices (intake no llama LLM). Se resuelve cuando llegue la slice del agente `policy` o `decision`. Default tentativo: Anthropic SDK directo para no agregar abstraccion innecesaria, salvo que necesitemos features especificos del Vercel AI SDK (streaming helpers, tool calling helpers).

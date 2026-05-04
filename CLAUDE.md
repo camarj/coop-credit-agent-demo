@@ -61,17 +61,22 @@ El demo DEBE cumplir con todo lo siguiente. Cualquier feature que se proponga de
 
 ## Stack tecnico (decidido)
 
-- **Lenguaje:** TypeScript (no Python)
+- **Lenguaje:** TypeScript (no Python), Node 22 LTS pinneado
+- **Package manager:** pnpm
 - **Frontend:** Next.js 15 + React 19 + Tailwind + shadcn/ui
 - **Orchestrator:** LangGraph.js (puerto TS de LangGraph)
-- **LLM:** Claude (Anthropic SDK) + posible OpenAI como fallback
+- **LLM:** Claude (Anthropic SDK). Vercel AI SDK como capa: pendiente de decision
 - **Validacion de schemas:** Zod
-- **Estado versionado:** Postgres (Supabase o Neon) con tabla append-only
-- **RAG:** Postgres + pgvector
+- **ORM:** Drizzle (con `drizzle-kit` para migrations versionadas)
+- **DB local:** Postgres 16 en Docker Compose con imagen `pgvector/pgvector:pg16`
+- **DB cloud:** **Neon** (branching por PR via integracion Vercel)
+- **RAG:** pgvector en el mismo Postgres
 - **Observabilidad:** Langfuse (cloud free tier para el demo, self-hosted opcional)
 - **Tests:** Vitest + Playwright (E2E del flow completo)
-- **Deploy publico:** Vercel (UI) + Railway/Supabase (DB + servicios)
-- **Local:** Docker Compose para Postgres + dependencias
+- **Deploy publico:** Vercel (UI + API) + Neon (DB)
+- **Estructura del repo:** Single Next.js project (no monorepo)
+
+Para detalles y rationale ver `docs/adr/0001-typescript-langgraph-stack.md`.
 
 ---
 
@@ -121,6 +126,18 @@ Todas las skills viven directamente bajo `.claude/skills/{nombre}/SKILL.md`.
 
 ---
 
+## Design system de la UI
+
+La UI usa el **Inteliside Design System v2 (Editorial, inspirado en Anthropic)** en **Modo Light**. Specs concretos, tokens, configuracion de Tailwind/shadcn, y reglas visuales viven en `.claude/rules/inteliside-design-light.md`. Lectura obligatoria antes de tocar cualquier componente UI.
+
+**Fuente de verdad canonica:** `~/.claude/skills/inteliside-design/` (skill global de Claude Code, symlink a `~/Documents/Inteliside/Design-System-v2/`). Incluye `colors_and_type.css` con tokens autoritativos, `preview/*.html` con componentes en vivo, y `ui_kits/` con landings/decks/docs de referencia.
+
+**Resumen de un parrafo:** fondo ivory warm `#F5F1EB` (NO blanco puro), texto warm ink `#141210`, acento teal `#2D9AA5` (links/CTA/eyebrows). Tipografia obligatoria: Fraunces (serif para H1/H2/lead/italics) + Geist (sans para body/H3/H4) + Geist Mono (eyebrows uppercase). Hairlines en vez de shadows. Border-radius 6px botones, 10px cards. Iconos Solar linework. Patron editorial-meta caracteristico. Maximo 3 colores en una vista. Sin emojis. Copy espanol segunda persona informal.
+
+**Importante:** este sistema (v2) es DISTINTO al manual de marca v1.0 (`~/Documents/Inteliside/Manual-Marca-Corporativo-Inteliside-v1.0.md`). El v1 esta deprecado para esta UI — no usar sus tokens.
+
+---
+
 ## Reglas duras del proyecto
 
 1. **Codigo en ingles, comentarios en espanol cuando agreguen contexto** (que NO es la mayoria de las veces — preferir nombres autoexplicativos)
@@ -130,6 +147,7 @@ Todas las skills viven directamente bajo `.claude/skills/{nombre}/SKILL.md`.
 5. **No tocar archivos fuera del proyecto** sin autorizacion explicita.
 6. **Commits con mensaje claro en ingles.** Formato: `tipo: descripcion corta` (feat/fix/docs/test/refactor/chore).
 7. **NUNCA hacer push, force push, o cualquier comando destructivo de git sin pedir confirmacion.**
+8. **UI sigue el design system de Inteliside Modo Light** — ver seccion `Design system de la UI` arriba y `.claude/rules/inteliside-design-light.md`.
 
 ---
 

@@ -65,6 +65,27 @@ _Avoid:_ disyuntor (en codigo en ingles)
 **Tool:**
 Una funcion que un agente LLM puede invocar. Tiene schema Zod estricto para input y output. NO confundir con "agente" — un agente puede usar varios tools.
 
+**allowedTools:**
+Lista explicita de tool names que cada agente puede invocar. Declarada en `agents/{name}/config.ts`. Guard en runtime emite `UnauthorizedToolError` si un agente intenta usar un tool fuera de su lista. Ej: `policy.allowedTools = ['rag.retrieve', 'rag.rerank']`.
+
+**Confidence:**
+Numero en `[0, 1]` adjunto a cada `Decision`. **Es funcion deterministica de las senales upstream** (resultados de los agentes anteriores) — NO es autoasignada por el LLM. El LLM solo redacta la justificacion en lenguaje natural.
+
+**Confidence threshold:**
+Umbral configurable (default `0.75`, env var `CONFIDENCE_THRESHOLD`). Si `confidence < threshold`, la `Decision` se marca para escalar a oficial humano explicitamente — la decision sigue siendo "sugerida" pero la UI la presenta distinta.
+
+**Token budget:**
+Limite hard de tokens (input + output) consumibles por una `Solicitud` completa. Default `50_000`, env var `TOKEN_BUDGET_PER_APPLICATION`. Si la suma excede, el orchestrator detiene la pipeline, marca la solicitud como `REVIEW` con razon `token_budget_exceeded`, y dispara la saga.
+
+**Idempotency key:**
+UUID generado client-side incluido en cada submit de solicitud. Constraint `UNIQUE` en DB previene duplicados ante doble-click o retries de red. Si llega un submit con un key ya procesado, el API devuelve la decision existente sin re-procesar.
+
+**Hard inquiry:**
+Efecto colateral simulado de `EquifaxMock.requestHardPull()`. Cada pull registra un hard inquiry en el estado interno del mock; los hard inquiries acumulados afectan el `score` en pulls futuros. Reversible via `compensate()` del agente `bureau` — esto es lo que hace que la saga sea **real, no teatral**.
+
+**Razonamiento (streaming):**
+Eventos estructurados que un agente emite durante su ejecucion (NO son tokens del LLM streamed, son discretos): `{ agent, step, message }`. Llegan a la UI via SSE y se muestran en un panel lateral por nodo activo. Hace visible el "pensar en voz alta" del sistema.
+
 ### Mocks de servicios externos
 
 **RegistroCivilMock:**
