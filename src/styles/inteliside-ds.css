@@ -1,0 +1,562 @@
+/* ============================================================
+   Inteliside Design System — v2 Editorial (Anthropic-inspired)
+   Warm ivory light · Warm black dark · System-follow
+   Teal #2D9AA5 as primary accent (replaces Anthropic's clay).
+   ============================================================ */
+
+/*
+ * Fonts (Fraunces, Geist, Geist Mono) are loaded via Next's font system
+ * in src/app/layout.tsx — the original Google Fonts @import from the
+ * skill is removed here to avoid CSS @import ordering issues with
+ * Tailwind v4. To refresh the design system from the canonical source,
+ * re-copy and re-strip this @import line.
+ */
+
+:root {
+  /* ========== Brand primitives ========== */
+  --teal-500: #2D9AA5;   /* primary accent */
+  --teal-600: #268590;   /* hover */
+  --teal-700: #1F6F78;
+  --teal-50:  #EAF4F5;
+  --teal-100: #D1E7EA;
+
+  /* Warm neutrals — ivory scale (Anthropic cream spirit) */
+  --ivory-50:  #FAF7F2;
+  --ivory-100: #F5F1EB;   /* LIGHT MODE CANVAS */
+  --ivory-200: #EDE8DE;
+  --ivory-300: #E0D9CC;
+  --ivory-400: #C9C0B0;
+  --ivory-500: #A89F8E;
+
+  /* Warm inks — black scale */
+  --ink-50:   #1C1A17;
+  --ink-100:  #141210;
+  --ink-200:  #0F0D0B;
+  --ink-900:  #070605;    /* DARK MODE CANVAS — warm not flat */
+
+  /* Pure */
+  --white: #FFFFFF;
+  --black: #000000;
+
+  /* ========== Typography ========== */
+  --font-serif:  "Fraunces", "Source Serif 4", "Iowan Old Style", Georgia, serif;
+  --font-sans:   "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono:   "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --fw-thin: 100;
+  --fw-extralight: 200;
+  --fw-light: 300;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* Fluid type — editorial big, generous air */
+  --fs-display:  clamp(3rem,   7vw, 6.5rem);   /* 48 → 104 px */
+  --fs-h1:       clamp(2.25rem,5vw, 4.25rem);  /* 36 → 68 */
+  --fs-h2:       clamp(1.75rem,3.4vw, 2.75rem);/* 28 → 44 */
+  --fs-h3:       1.5rem;     /* 24 */
+  --fs-h4:       1.125rem;   /* 18 */
+  --fs-lead:     clamp(1.125rem, 1.5vw, 1.375rem); /* 18 → 22 */
+  --fs-body:     1.0625rem;  /* 17 — editorial body */
+  --fs-body-sm:  0.9375rem;  /* 15 */
+  --fs-meta:     0.8125rem;  /* 13 */
+  --fs-micro:    0.6875rem;  /* 11 — mono eyebrows */
+
+  --lh-tight: 1.05;
+  --lh-snug:  1.15;
+  --lh-normal: 1.4;
+  --lh-relaxed: 1.6;
+  --lh-article: 1.7;
+
+  --tracking-display: -0.04em;   /* big serif pull tight */
+  --tracking-h2: -0.02em;
+  --tracking-body: -0.005em;
+  --tracking-mono: 0.08em;
+
+  /* ========== Spacing (4-pt) ========== */
+  --s-1: 4px;   --s-2: 8px;   --s-3: 12px;  --s-4: 16px;
+  --s-5: 20px;  --s-6: 24px;  --s-8: 32px;  --s-10: 40px;
+  --s-12: 48px; --s-16: 64px; --s-20: 80px; --s-24: 96px;
+  --s-32: 128px; --s-40: 160px;
+
+  /* ========== Radii — soft but never pill ========== */
+  --r-xs: 2px;  --r-sm: 4px;  --r-md: 6px;  --r-lg: 10px;  --r-xl: 14px;
+
+  /* ========== Motion ========== */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-smooth:    cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 180ms;
+  --dur-base: 320ms;
+  --dur-slow: 600ms;
+}
+
+/* ========== LIGHT MODE (default) — warm ivory ========== */
+:root, .light, [data-theme="light"] {
+  --bg:            var(--ivory-100);
+  --bg-elevated:   var(--ivory-50);
+  --bg-subtle:     var(--ivory-200);
+  --fg:            var(--ink-100);
+  --fg-muted:      #4A453D;
+  --fg-subtle:     #7A7366;
+  --fg-inverse:    var(--ivory-50);
+
+  --rule:          rgba(20, 18, 16, 0.14);
+  --rule-soft:     rgba(20, 18, 16, 0.08);
+  --rule-strong:   rgba(20, 18, 16, 0.30);
+
+  --accent:        var(--teal-500);
+  --accent-hover:  var(--teal-600);
+  --accent-wash:   rgba(45, 154, 165, 0.08);
+
+  --shadow-soft:   0 1px 2px rgba(20,18,16,0.04);
+  --shadow-lift:   0 12px 32px rgba(20,18,16,0.08);
+  color-scheme: light;
+}
+
+/* ========== DARK MODE — warm ink ========== */
+.dark, [data-theme="dark"] {
+  --bg:            var(--ink-900);
+  --bg-elevated:   var(--ink-100);
+  --bg-subtle:     var(--ink-50);
+  --fg:            #EDE8DE;       /* cream, not pure white */
+  --fg-muted:      #B8B0A1;
+  --fg-subtle:     #7A7366;
+  --fg-inverse:    var(--ink-900);
+
+  --rule:          rgba(237, 232, 222, 0.12);
+  --rule-soft:     rgba(237, 232, 222, 0.06);
+  --rule-strong:   rgba(237, 232, 222, 0.28);
+
+  --accent:        var(--teal-500);
+  --accent-hover:  #3FB0BC;
+  --accent-wash:   rgba(45, 154, 165, 0.14);
+
+  --shadow-soft:   0 1px 2px rgba(0,0,0,0.4);
+  --shadow-lift:   0 12px 40px rgba(0,0,0,0.5);
+  color-scheme: dark;
+}
+
+/* ========== SYSTEM MODE — follows OS ========== */
+@media (prefers-color-scheme: dark) {
+  .system, [data-theme="system"] {
+    --bg:            var(--ink-900);
+    --bg-elevated:   var(--ink-100);
+    --bg-subtle:     var(--ink-50);
+    --fg:            #EDE8DE;
+    --fg-muted:      #B8B0A1;
+    --fg-subtle:     #7A7366;
+    --fg-inverse:    var(--ink-900);
+    --rule:          rgba(237, 232, 222, 0.12);
+    --rule-soft:     rgba(237, 232, 222, 0.06);
+    --rule-strong:   rgba(237, 232, 222, 0.28);
+    --accent-wash:   rgba(45, 154, 165, 0.14);
+    --shadow-soft:   0 1px 2px rgba(0,0,0,0.4);
+    --shadow-lift:   0 12px 40px rgba(0,0,0,0.5);
+    color-scheme: dark;
+  }
+}
+
+/* ========== Semantic element styles ========== */
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-relaxed);
+  letter-spacing: var(--tracking-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "ss02";
+  transition: background var(--dur-base) var(--ease-smooth),
+              color var(--dur-base) var(--ease-smooth);
+}
+
+/* Display — editorial serif at huge sizes */
+.type-display, .display {
+  font-family: var(--font-serif);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-display);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-display);
+  color: var(--fg);
+  font-variation-settings: "opsz" 144, "SOFT" 50;
+}
+
+h1, .h1 {
+  font-family: var(--font-serif);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-display);
+  color: var(--fg);
+  font-variation-settings: "opsz" 144;
+}
+
+h2, .h2 {
+  font-family: var(--font-serif);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-h2);
+  color: var(--fg);
+}
+
+h3, .h3 {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-snug);
+  color: var(--fg);
+}
+
+h4, .h4 {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-h4);
+  line-height: var(--lh-snug);
+  color: var(--fg);
+}
+
+p, .body {
+  font-family: var(--font-sans);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-body);
+  line-height: var(--lh-relaxed);
+  color: var(--fg);
+}
+
+.lead {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-lead);
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.meta, .eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+  color: var(--fg-muted);
+}
+
+/* Anthropic-style eyebrow row: category — date → */
+.entry-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-mono);
+  color: var(--fg-subtle);
+}
+.entry-meta .cat { color: var(--accent); }
+
+/* Anthropic-style link — bottom underline with animated fill */
+.link-editorial {
+  position: relative;
+  color: var(--fg);
+  text-decoration: none;
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  transition: background-size var(--dur-base) var(--ease-smooth),
+              color var(--dur-base) var(--ease-smooth);
+}
+.link-editorial:hover {
+  background-size: 100% 1px;
+  color: var(--accent);
+}
+
+/* Hairline divider */
+.hairline { border: 0; height: 1px; background: var(--rule); margin: 0; }
+.hairline-soft { border: 0; height: 1px; background: var(--rule-soft); margin: 0; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  padding: 12px 22px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  font-size: var(--fs-body-sm);
+  letter-spacing: -0.005em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--dur-base) var(--ease-smooth);
+}
+.btn-primary { background: var(--accent); color: var(--fg-inverse); }
+.btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.btn-ghost { background: transparent; color: var(--fg); border-color: var(--rule-strong); }
+.btn-ghost:hover { border-color: var(--fg); background: var(--accent-wash); }
+.btn-text { background: transparent; color: var(--fg); padding: 8px 0; border-radius: 0; }
+.btn-text:hover { color: var(--accent); }
+
+/* Accent color helper */
+.accent, .teal { color: var(--accent); }
+.muted { color: var(--fg-muted); }
+.subtle { color: var(--fg-subtle); }
+
+/* Serif italic drop — used for editorial highlights in prose */
+.serif-italic {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--fw-regular);
+}
+
+/* ============================================================
+   GLASS SYSTEM — adapted from DESIGN.md
+   Gradient border shell + inset surface + teal glow
+   ============================================================ */
+
+/* Shell wrapper: thin gradient edge that reads as premium depth */
+.glass-shell {
+  display: block;
+  padding: 1px;
+  border-radius: 24px;
+  background: linear-gradient(to right bottom,
+    rgba(237, 232, 222, 0.22),
+    rgba(237, 232, 222, 0.04),
+    rgba(0, 0, 0, 0));
+  box-shadow:
+    0 22px 40px rgba(0, 0, 0, 0.35),
+    0 0 0 transparent;
+  transition: box-shadow var(--dur-base) var(--ease-smooth),
+              transform var(--dur-base) var(--ease-smooth);
+}
+.glass-shell:hover {
+  box-shadow:
+    0 28px 56px rgba(0, 0, 0, 0.45),
+    0 0 18px rgba(45, 154, 165, 0.28);
+}
+.glass-shell--accent {
+  background: linear-gradient(to right bottom,
+    rgba(45, 154, 165, 0.55),
+    rgba(45, 154, 165, 0.08),
+    rgba(0, 0, 0, 0));
+}
+
+/* Inner surface */
+.glass-surface {
+  border-radius: 23px;
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 40px rgba(237, 232, 222, 0.02);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Light-mode overrides — softer shell, no heavy drop shadow */
+:root, .light, [data-theme="light"] {
+  --glass-shell-grad: linear-gradient(to right bottom,
+    rgba(20, 18, 16, 0.18),
+    rgba(20, 18, 16, 0.04),
+    rgba(0, 0, 0, 0));
+  --glass-surface-bg: var(--ivory-50);
+  --glass-shell-shadow: 0 8px 24px rgba(20,18,16,0.05);
+}
+.dark, [data-theme="dark"] {
+  --glass-shell-grad: linear-gradient(to right bottom,
+    rgba(237, 232, 222, 0.22),
+    rgba(237, 232, 222, 0.04),
+    rgba(0, 0, 0, 0));
+  --glass-surface-bg: rgba(20, 18, 16, 0.72);
+  --glass-shell-shadow: 0 22px 40px rgba(0,0,0,0.35);
+}
+@media (prefers-color-scheme: dark) {
+  .system, [data-theme="system"] {
+    --glass-shell-grad: linear-gradient(to right bottom,
+      rgba(237, 232, 222, 0.22),
+      rgba(237, 232, 222, 0.04),
+      rgba(0, 0, 0, 0));
+    --glass-surface-bg: rgba(20, 18, 16, 0.72);
+    --glass-shell-shadow: 0 22px 40px rgba(0,0,0,0.35);
+  }
+}
+@media (prefers-color-scheme: light) {
+  .system, [data-theme="system"] {
+    --glass-shell-grad: linear-gradient(to right bottom,
+      rgba(20, 18, 16, 0.18),
+      rgba(20, 18, 16, 0.04),
+      rgba(0, 0, 0, 0));
+    --glass-surface-bg: var(--ivory-50);
+    --glass-shell-shadow: 0 8px 24px rgba(20,18,16,0.05);
+  }
+}
+.glass-shell { background: var(--glass-shell-grad); box-shadow: var(--glass-shell-shadow); }
+.glass-surface { background: var(--glass-surface-bg); }
+
+/* Soft radius options */
+.r-16 { border-radius: 16px; } .r-16-inner { border-radius: 15px; }
+.r-24 { border-radius: 24px; } .r-24-inner { border-radius: 23px; }
+.r-pill { border-radius: 9999px; }
+
+/* Teal glow — small accent for live indicators */
+.glow-teal {
+  box-shadow: 0 0 12px rgba(45, 154, 165, 0.6);
+}
+
+/* Section vignette — fade bg to transparent for transitions */
+.vignette-top {
+  position: absolute; inset: 0 0 auto 0; height: 120px;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+  pointer-events: none;
+}
+.vignette-bottom {
+  position: absolute; inset: auto 0 0 0; height: 120px;
+  background: linear-gradient(to top, var(--bg), transparent);
+  pointer-events: none;
+}
+
+/* ============================================================
+   V2 — Multi-medium surface tokens
+   ============================================================ */
+
+/* Semantic utility colors */
+:root {
+  --success: #5A8A42;
+  --warning: #C67E2F;
+  --danger:  #B64545;
+  --info:    #3A7A95;
+}
+
+/* ================ PRESENTATION SURFACE (1920×1080) ================ */
+.surface-deck {
+  width: 1920px; height: 1080px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.surface-deck .deck-pad { padding: 96px 120px; flex-grow: 1; display: flex; flex-direction: column; }
+.surface-deck h1, .surface-deck .display {
+  font-size: 112px; line-height: 1.02; letter-spacing: -0.04em;
+  font-family: var(--font-serif); font-weight: 400; font-variation-settings: "opsz" 144;
+}
+.surface-deck h2 { font-size: 72px; line-height: 1.05; letter-spacing: -0.03em; font-family: var(--font-serif); font-weight: 400; }
+.surface-deck h3 { font-size: 36px; line-height: 1.2; font-family: var(--font-sans); font-weight: 500; }
+.surface-deck .body { font-size: 24px; line-height: 1.45; }
+.surface-deck .eyebrow { font-size: 16px; letter-spacing: 0.14em; }
+.surface-deck .deck-chrome {
+  position: absolute; bottom: 40px; left: 120px; right: 120px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--fg-subtle);
+  padding-top: 20px; border-top: 1px solid var(--rule);
+}
+
+/* ================ DOCUMENT SURFACE (A4, 816×1056 @96dpi) ================ */
+.surface-doc {
+  width: 816px; min-height: 1056px;
+  background: var(--ivory-50);
+  color: var(--ink-100);
+  font-family: var(--font-sans); font-size: 11pt; line-height: 1.55;
+  padding: 72px 80px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 10px rgba(20,18,16,0.06);
+}
+.surface-doc h1 { font-family: var(--font-serif); font-size: 38pt; line-height: 1.06; letter-spacing: -0.03em; font-weight: 400; margin: 0 0 8pt; }
+.surface-doc h2 { font-family: var(--font-serif); font-size: 20pt; line-height: 1.2; margin: 22pt 0 8pt; font-weight: 400; }
+.surface-doc h3 { font-family: var(--font-sans); font-size: 12pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin: 18pt 0 6pt; color: var(--accent); }
+.surface-doc p { margin: 0 0 10pt; max-width: 62ch; }
+.surface-doc .doc-header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16pt; border-bottom: 1px solid var(--rule); margin-bottom: 28pt; }
+.surface-doc .doc-footer { border-top: 1px solid var(--rule); padding-top: 10pt; margin-top: 32pt; font-family: var(--font-mono); font-size: 8pt; text-transform: uppercase; letter-spacing: 0.1em; color: var(--fg-subtle); display: flex; justify-content: space-between; }
+
+/* ================ SOCIAL SURFACES ================ */
+/* IG/Feed square 1080 */
+.surface-social-sq {
+  width: 1080px; height: 1080px;
+  background: var(--bg); color: var(--fg);
+  position: relative; overflow: hidden;
+  font-family: var(--font-sans);
+  padding: 96px;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.surface-social-sq h1 { font-family: var(--font-serif); font-size: 92px; line-height: 1.02; letter-spacing: -0.035em; font-weight: 400; margin: 0; }
+.surface-social-sq .eyebrow { font-size: 18px; letter-spacing: 0.18em; }
+
+/* IG Story / Reel 1080×1920 */
+.surface-social-story {
+  width: 1080px; height: 1920px;
+  background: var(--bg); color: var(--fg);
+  position: relative; overflow: hidden;
+  font-family: var(--font-sans);
+  padding: 120px 80px;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.surface-social-story h1 { font-family: var(--font-serif); font-size: 120px; line-height: 1.02; letter-spacing: -0.04em; font-weight: 400; margin: 0; }
+
+/* LinkedIn banner 1584×396 */
+.surface-linkedin-banner {
+  width: 1584px; height: 396px;
+  background: var(--bg); color: var(--fg);
+  position: relative; overflow: hidden;
+  font-family: var(--font-sans);
+  padding: 48px 96px;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center;
+}
+
+/* ================ Social/deck-ready accent chips ================ */
+.chip-teal {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+.chip-fill {
+  background: var(--accent); color: var(--fg-inverse);
+  border-color: transparent;
+}
+
+/* ================ Editorial pull-quote ================ */
+.pullquote {
+  font-family: var(--font-serif); font-style: italic; font-weight: 400;
+  font-size: clamp(1.5rem, 2.4vw, 2.25rem);
+  line-height: 1.3; letter-spacing: -0.015em;
+  color: var(--fg);
+  border-left: 2px solid var(--accent);
+  padding-left: 24px;
+  margin: 32px 0;
+}
+.pullquote cite { display: block; font-family: var(--font-mono); font-style: normal; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-subtle); margin-top: 10px; }
+
+/* ================ Data / metric tokens ================ */
+.metric-n {
+  font-family: var(--font-serif); font-weight: 400;
+  font-size: clamp(3rem, 6vw, 5rem);
+  line-height: 1; letter-spacing: -0.05em;
+  font-variation-settings: "opsz" 144;
+}
+.metric-u { font-size: 0.4em; color: var(--fg-subtle); margin-left: 4px; }
+.metric-label { font-family: var(--font-serif); font-style: italic; font-size: 1.05rem; color: var(--fg-muted); }
+
+/* ================ Tabular micro-rows (dashboards / reports) ================ */
+.row-editorial {
+  display: grid; grid-template-columns: 1fr 2fr 3fr auto; gap: 32px;
+  padding: 20px 0; border-bottom: 1px solid var(--rule);
+  align-items: baseline;
+}
+.row-editorial .cat { color: var(--accent); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+/* ================ Iconography baseline ================ */
+.icon-solar { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ================ Social branded frame (thin border corners) ================ */
+.frame-corners { position: relative; }
+.frame-corners::before, .frame-corners::after {
+  content: ""; position: absolute; width: 18px; height: 18px; border-color: var(--accent);
+}
+.frame-corners::before { top: 0; left: 0; border-top: 1px solid; border-left: 1px solid; }
+.frame-corners::after  { bottom: 0; right: 0; border-bottom: 1px solid; border-right: 1px solid; }

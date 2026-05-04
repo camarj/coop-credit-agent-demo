@@ -54,3 +54,5 @@ postgres-data/
 # Misc
 .turbo/
 .vercel/
+test-results/
+playwright-report/

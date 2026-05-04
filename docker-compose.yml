@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: coop-credit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: coop
+      POSTGRES_PASSWORD: coop_local
+      POSTGRES_DB: coop_credit_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coop -d coop_credit_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
