@@ -117,7 +117,14 @@ Simula la API del IESS (seguridad social EC) para verificar afiliacion laboral, 
 **EquifaxMock:** ver entrada detallada arriba en "Hard inquiry" — UNICO mock con side effect reversible.
 
 **ScoreAlternativoMock:**
-Simula un servicio de scoring alternativo (sin reportar, basado en patrones de gasto sintetizados).
+Simula un servicio de scoring alternativo (sin reportar, basado en patrones de gasto sintetizados). Devuelve `{ score: number /* 0-100 */, signals: string[] }`. Modos: `happy`, `slow` (2s, bajo el timeout de 5s del breaker), `error_500` (cuenta para breaker, abre tras 5 fallos), `sin_data` (DomainError, NO cuenta para breaker — el servicio respondio bien, solo que no tiene cobertura). Read-only — no expone `compensate()`. Vive en `src/services/mocks/score-alternativo/`.
+
+**Score alternativo:**
+Score sintetico `[0, 100]` derivado de patrones de gasto y huella digital del solicitante. Es **complementario** al score crediticio del bureau: cubre solicitantes thin-file (sin historial Equifax) y agrega senales cualitativas (`stable_spending`, `no_chargebacks`, `high_digital_footprint`, `young_account`, etc.). 30 de 45 personas del dataset tienen `altScore`; los autonomos sin huella y los fallecidos no. Producido por `altScoreAgent` corriendo **en paralelo** con `bureauAgent` (ver "Pipeline paralelo" abajo).
+_Avoid:_ score sintetico (en codigo si: `alt_score`)
+
+**Pipeline paralelo:**
+La pipeline default del orchestrator es `[identity, income, [bureau, alt_score]]` — el ultimo step es un array de agentes que corren con `Promise.allSettled`. La regla dura es **versiones pre-asignadas por orden de array**, no por wall-clock. Si `[bureau, alt_score]` arranca con version actual = 2, bureau persiste en v3 y alt_score en v4 sin importar quien resuelva primero. Si una rama paralela falla, la saga compensa **solo las exitosas del mismo step** y aborta el resto de la pipeline. Ver ADR-0006.
 
 ---
 

@@ -41,6 +41,13 @@ interface BureauContribution {
   };
 }
 
+interface AltScoreContribution {
+  alt_score: {
+    score: number;
+    signals: string[];
+  };
+}
+
 interface SagaContribution {
   __saga: {
     compensated: string[];
@@ -83,11 +90,20 @@ export default async function ApplicationPage({ params }: PageProps) {
   const incomeContribution = v2?.contribution as IncomeContribution | undefined;
   const income = incomeContribution?.income;
 
-  const v3 = states.find(
-    (s) => s.version === 3 && s.createdByAgent === 'bureau',
-  );
-  const bureauContribution = v3?.contribution as BureauContribution | undefined;
+  // Bureau and alt_score run in parallel from version 3 onward — array order
+  // pre-assigns versions (bureau=3, alt_score=4). Filter by agent name, not
+  // by version, so we stay agnostic to persistence wall-clock order.
+  const bureauRow = states.find((s) => s.createdByAgent === 'bureau');
+  const bureauContribution = bureauRow?.contribution as
+    | BureauContribution
+    | undefined;
   const bureau = bureauContribution?.bureau;
+
+  const altScoreRow = states.find((s) => s.createdByAgent === 'alt_score');
+  const altScoreContribution = altScoreRow?.contribution as
+    | AltScoreContribution
+    | undefined;
+  const altScore = altScoreContribution?.alt_score;
 
   const sagaRow = states.find((s) => s.createdByAgent === 'orchestrator');
   const sagaContribution = sagaRow?.contribution as
@@ -99,16 +115,20 @@ export default async function ApplicationPage({ params }: PageProps) {
   const identityResolved = identity !== undefined;
   const incomeResolved = income !== undefined;
   const bureauResolved = bureau !== undefined;
+  const altScoreResolved = altScore !== undefined;
 
   const leadCopy = (() => {
     if (saga) {
       return 'Solicitud terminada con saga ejecutada — los efectos colaterales fueron revertidos.';
     }
-    if (bureauResolved) {
-      return 'Pipeline de verificación completo: identidad, ingresos y bureau.';
+    if (bureauResolved && altScoreResolved) {
+      return 'Pipeline completo: identidad, ingresos, bureau y score alternativo.';
+    }
+    if (bureauResolved || altScoreResolved) {
+      return 'Identidad e ingresos verificados. Una de las dos ramas paralelas (bureau / score alternativo) no completó.';
     }
     if (incomeResolved) {
-      return 'Identidad e ingresos verificados. Bureau pendiente.';
+      return 'Identidad e ingresos verificados. Bureau y score alternativo pendientes.';
     }
     if (identityResolved) {
       return 'Identidad verificada. Ingresos pendientes — el agente de income no completó.';
@@ -273,10 +293,10 @@ export default async function ApplicationPage({ params }: PageProps) {
             <span className="cat">v3</span>
             <span>·</span>
             <span>BUREAU</span>
-            {v3 && (
+            {bureauRow && (
               <>
                 <span>·</span>
-                <span>{new Date(v3.createdAt).toISOString()}</span>
+                <span>{new Date(bureauRow.createdAt).toISOString()}</span>
               </>
             )}
           </div>
@@ -301,6 +321,52 @@ export default async function ApplicationPage({ params }: PageProps) {
             >
               Pendiente. El bureau de crédito no devolvió un reporte para esta
               solicitud.
+            </p>
+          )}
+        </article>
+
+        <hr className="hairline" />
+
+        <article data-testid="state-v4">
+          <div className="entry-meta mb-4">
+            <span className="cat">v4</span>
+            <span>·</span>
+            <span>ALT_SCORE</span>
+            {altScoreRow && (
+              <>
+                <span>·</span>
+                <span>{new Date(altScoreRow.createdAt).toISOString()}</span>
+              </>
+            )}
+          </div>
+          <h3 className="mb-4">Score alternativo</h3>
+          {altScore ? (
+            <dl className="grid grid-cols-2 gap-y-3 gap-x-8 text-[var(--fg)]">
+              <dt className="text-[var(--fg-muted)]">Score sintético</dt>
+              <dd data-testid="alt-score-value">{altScore.score} / 100</dd>
+
+              <dt className="text-[var(--fg-muted)]">Señales</dt>
+              <dd
+                data-testid="alt-score-signals"
+                className="flex flex-wrap gap-2"
+              >
+                {altScore.signals.map((signal) => (
+                  <span
+                    key={signal}
+                    className="font-mono text-[11px] uppercase tracking-[0.08em] bg-[var(--accent-wash)] text-[var(--accent)] px-2 py-1 rounded-[2px]"
+                  >
+                    {signal}
+                  </span>
+                ))}
+              </dd>
+            </dl>
+          ) : (
+            <p
+              className="text-[var(--fg-muted)]"
+              data-testid="alt-score-pending"
+            >
+              Pendiente. La fuente de datos alternativos no cubrió a este
+              solicitante en este intento.
             </p>
           )}
         </article>
