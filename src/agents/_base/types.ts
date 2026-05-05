@@ -30,6 +30,10 @@ export interface FullState {
     history: Array<{ at: number; source: string }>;
     hardInquiriesCount: number;
   };
+  alt_score?: {
+    score: number;
+    signals: string[];
+  };
 
   /**
    * Reserved namespace owned by the orchestrator (not by an agent).

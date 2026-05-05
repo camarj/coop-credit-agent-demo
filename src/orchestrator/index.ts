@@ -9,6 +9,7 @@ import {
 import { identityAgent } from '@/agents/identity';
 import { incomeAgent } from '@/agents/income';
 import { bureauAgent } from '@/agents/bureau';
+import { altScoreAgent } from '@/agents/alt_score';
 
 /**
  * Type alias for an agent with concrete IO types erased — used when the
@@ -20,20 +21,27 @@ import { bureauAgent } from '@/agents/bureau';
 export type AnyAgent = Agent<any, any>;
 
 /**
- * The default pipeline used by the production POST route. Tests can pass
- * a different array (eg. with a failingTestAgent appended to exercise saga
- * walk-back) without contaminating the production API. See ADR-0005.
+ * A pipeline step is either a single agent (serial) or an array of agents
+ * to run in parallel. The orchestrator dispatches in exactly ONE place
+ * (runStep) — adding more `Array.isArray` checks elsewhere is a smell.
+ * See ADR-0006.
  */
-export const defaultPipeline: AnyAgent[] = [
+export type PipelineStep = AnyAgent | AnyAgent[];
+export type Pipeline = PipelineStep[];
+
+export const defaultPipeline: Pipeline = [
   identityAgent,
   incomeAgent,
-  bureauAgent,
+  [bureauAgent, altScoreAgent],
 ];
 
 interface RanAgent {
   agent: AnyAgent;
   input: unknown;
 }
+
+/** A step's ran agents, in the order they were declared in the array. */
+type RanStep = RanAgent[];
 
 async function nextVersion(applicationId: string): Promise<number> {
   const [row] = await db
@@ -45,15 +53,15 @@ async function nextVersion(applicationId: string): Promise<number> {
   return (row?.version ?? -1) + 1;
 }
 
-async function runAgent<TInput, TOutput>(
+async function executeAgent<TInput, TOutput>(
   agent: Agent<TInput, TOutput>,
   applicationId: string,
+  version: number,
   ctx: ExecCtx,
 ): Promise<{ input: TInput; output: TOutput }> {
   const state = await getLatestFullState(applicationId);
   const input = agent.inputSchema.parse(agent.selectInput(state));
   const output = agent.outputSchema.parse(await agent.execute(input, ctx));
-  const version = await nextVersion(applicationId);
   await persistContribution(applicationId, {
     version,
     agentName: agent.name,
@@ -62,22 +70,77 @@ async function runAgent<TInput, TOutput>(
   return { input, output };
 }
 
+/**
+ * Runs a single pipeline step (serial or parallel). Returns the agents that
+ * completed successfully along with their inputs (so compensate() can be
+ * called later). Throws the first failure observed; if a parallel step had
+ * multiple failures, the rest are dropped (best-effort original-error fidelity).
+ *
+ * Parallel rule: versions are pre-assigned by array order BEFORE Promise.allSettled
+ * fires. So if `step = [bureau, altScore]` and current version is 2, bureau gets
+ * 3 and altScore gets 4 — regardless of who finishes first in wall-clock time.
+ * This is what the AC of issue #5 means by "agnostic to persistence order".
+ */
+async function runStep(
+  step: PipelineStep,
+  applicationId: string,
+  ctx: ExecCtx,
+): Promise<{ ran: RanStep; failure?: { agentName: string; error: unknown } }> {
+  const agents = Array.isArray(step) ? step : [step];
+  const baseVersion = await nextVersion(applicationId);
+
+  const settled = await Promise.allSettled(
+    agents.map((agent, i) =>
+      executeAgent(agent, applicationId, baseVersion + i, ctx),
+    ),
+  );
+
+  const ran: RanStep = [];
+  let firstFailure: { agentName: string; error: unknown } | undefined;
+
+  settled.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      ran.push({ agent: agents[i], input: result.value.input });
+    } else if (firstFailure === undefined) {
+      firstFailure = { agentName: agents[i].name, error: result.reason };
+    }
+  });
+
+  return { ran, failure: firstFailure };
+}
+
+async function compensateStep(step: RanStep, ctx: ExecCtx): Promise<string[]> {
+  const compensated: string[] = [];
+  // Within a parallel step, compensation order between siblings is irrelevant
+  // — they had no causal dependency on each other. Run them concurrently.
+  const settled = await Promise.allSettled(
+    step.map(async (entry) => {
+      if (!entry.agent.compensate) return null;
+      await entry.agent.compensate(entry.input, ctx);
+      return entry.agent.name;
+    }),
+  );
+  for (const r of settled) {
+    if (r.status === 'fulfilled' && r.value !== null) {
+      compensated.push(r.value);
+    }
+    // Compensation failures are swallowed — must not mask original cause.
+  }
+  return compensated;
+}
+
 async function walkBackSaga(
-  ran: RanAgent[],
+  ranSteps: RanStep[],
   reason: string,
   applicationId: string,
   ctx: ExecCtx,
 ): Promise<void> {
   const compensated: string[] = [];
 
-  for (const entry of [...ran].reverse()) {
-    if (!entry.agent.compensate) continue;
-    try {
-      await entry.agent.compensate(entry.input, ctx);
-      compensated.push(entry.agent.name);
-    } catch {
-      // Compensation must not mask the original failure. Best-effort.
-    }
+  // LIFO across steps; intra-step parallel siblings compensate concurrently.
+  for (const step of [...ranSteps].reverse()) {
+    const stepCompensated = await compensateStep(step, ctx);
+    compensated.push(...stepCompensated);
   }
 
   if (compensated.length === 0) return;
@@ -89,7 +152,7 @@ async function walkBackSaga(
     createdByAgent: 'orchestrator',
     contribution: {
       __saga: {
-        compensated: compensated.reverse(), // chronological order
+        compensated,
         reason,
         completedAt: new Date().toISOString(),
       },
@@ -98,41 +161,43 @@ async function walkBackSaga(
 }
 
 /**
- * Slice 4 orchestrator: linear sequence with saga walk-back. Accepts an
- * arbitrary `agents` array, letting tests inject a failing agent after
- * `bureau` to exercise compensation. Production passes `defaultPipeline`.
- *
- * On failure: walks back through the agents that succeeded, calling
- * compensate() in reverse order. Persists a single __saga row only when
- * at least one compensate ran. Re-throws the original error.
+ * Slice 5 orchestrator. Accepts a pipeline of steps where each step is a
+ * single agent or an array of agents to run in parallel. On any failure,
+ * walks back through completed steps (LIFO across steps, concurrent within
+ * a parallel step), calling compensate() and persisting a __saga row.
+ * Re-throws the original error.
  */
 export async function runOrchestrator(
   applicationId: string,
   ctx: ExecCtx,
-  agents: AnyAgent[],
+  pipeline: Pipeline,
 ): Promise<void> {
   return ctx.tracer.span(
     'orchestrator.run',
-    { applicationId, pipelineSize: agents.length },
+    { applicationId, steps: pipeline.length },
     async (span) => {
       span.addEvent('orchestrator.start');
-      const ran: RanAgent[] = [];
+      const ranSteps: RanStep[] = [];
 
       try {
-        for (const agent of agents) {
-          const { input } = await runAgent(agent, applicationId, ctx);
-          ran.push({ agent, input });
+        for (const step of pipeline) {
+          const { ran, failure } = await runStep(step, applicationId, ctx);
+          if (failure) {
+            ranSteps.push(ran); // partial successes still need compensation
+            span.addEvent('orchestrator.step_failed', {
+              agent: failure.agentName,
+            });
+            throw failure.error;
+          }
+          ranSteps.push(ran);
         }
         span.addEvent('orchestrator.complete');
       } catch (err) {
-        span.addEvent('orchestrator.failed', {
-          reason: err instanceof Error ? err.message : String(err),
-        });
         const reason =
           err instanceof Error
             ? `${err.constructor.name}: ${err.message}`
             : String(err);
-        await walkBackSaga(ran, reason, applicationId, ctx);
+        await walkBackSaga(ranSteps, reason, applicationId, ctx);
         throw err;
       }
     },

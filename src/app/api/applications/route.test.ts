@@ -3,17 +3,27 @@ import { POST } from './route';
 import { closeDb, resetDb } from '@/db/test-helpers';
 import { db } from '@/db/client';
 import { applications, applicationStates } from '@/db/schema';
-import { __resetForTesting } from '@/services/mocks/registro-civil';
+import { __resetForTesting as resetRegistroCivil } from '@/services/mocks/registro-civil';
+import { __resetForTesting as resetIess } from '@/services/mocks/iess';
+import { __resetForTesting as resetEquifax } from '@/services/mocks/equifax';
+import { __resetForTesting as resetAltScore } from '@/services/mocks/score-alternativo';
 import { personas, cedulasNotFound } from '@/services/mocks/_dataset/personas';
 
 beforeEach(async () => {
   await resetDb();
-  __resetForTesting();
+  resetRegistroCivil();
+  resetIess();
+  resetEquifax();
+  resetAltScore();
 });
 afterAll(closeDb);
 
+const fullPipelinePersona = personas.find(
+  (p) => p.employment !== undefined && p.altScore !== undefined,
+)!;
+
 const validInput = {
-  cedula: personas[0].cedula,
+  cedula: fullPipelinePersona.cedula,
   ingresos: 1500,
   monto: 3000,
   plazo: 24,
@@ -28,20 +38,20 @@ function buildRequest(body: unknown): Request {
 }
 
 describe('POST /api/applications', () => {
-  it('returns 200 with version=3 when full pipeline succeeds (intake + identity + income + bureau)', async () => {
+  it('returns 200 with version=4 when full pipeline succeeds (intake + identity + income + [bureau ‖ alt_score])', async () => {
     const response = await POST(buildRequest(validInput));
 
     expect(response.status).toBe(200);
     const json = await response.json();
     expect(typeof json.applicationId).toBe('string');
-    expect(json.version).toBe(3);
+    expect(json.version).toBe(4);
 
     const apps = await db.select().from(applications);
     expect(apps).toHaveLength(1);
     expect(apps[0].id).toBe(json.applicationId);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(4);
+    expect(states).toHaveLength(5);
   });
 
   it('returns 200 with version=0 when cedula is not in dataset (intake ok, identity DomainError)', async () => {

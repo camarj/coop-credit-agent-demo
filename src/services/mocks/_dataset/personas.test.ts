@@ -58,6 +58,25 @@ describe('master dataset — cedulasNotFound', () => {
   });
 });
 
+describe('master dataset — alternative score (synthetic)', () => {
+  it('has altScore on at least 25 personas, missing on at most 20', () => {
+    const con = personas.filter((p) => p.altScore !== undefined);
+    const sin = personas.filter((p) => p.altScore === undefined);
+    expect(con.length).toBeGreaterThanOrEqual(25);
+    expect(sin.length).toBeLessThanOrEqual(20);
+    expect(con.length + sin.length).toBe(personas.length);
+  });
+
+  it('every altScore is in [0, 100] and signals is a non-empty array', () => {
+    for (const p of personas) {
+      if (p.altScore === undefined) continue;
+      expect(p.altScore.score).toBeGreaterThanOrEqual(0);
+      expect(p.altScore.score).toBeLessThanOrEqual(100);
+      expect(p.altScore.signals.length).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe('master dataset — Equifax baseScore', () => {
   it('every persona has equifaxBaseScore in [350, 820]', () => {
     for (const p of personas) {

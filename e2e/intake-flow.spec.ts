@@ -10,7 +10,7 @@ const AUTONOMO_CEDULA = '1250000054';
 const FALLECIDO_CEDULA = '1740000060';
 const NOT_FOUND_CEDULA = '2230000073';
 
-test('happy path — full pipeline produces v0, v1 (identity), v2 (income), v3 (bureau)', async ({
+test('happy path — full pipeline produces v0..v4 (intake, identity, income, bureau ‖ alt_score)', async ({
   page,
 }) => {
   await page.goto('/');
@@ -23,7 +23,7 @@ test('happy path — full pipeline produces v0, v1 (identity), v2 (income), v3 (
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
-  await expect(page.getByTestId('latest-version')).toHaveText('v3');
+  await expect(page.getByTestId('latest-version')).toHaveText('v4');
 
   // v0
   await expect(page.getByTestId('data-cedula')).toHaveText(
@@ -45,6 +45,13 @@ test('happy path — full pipeline produces v0, v1 (identity), v2 (income), v3 (
   // v3 — bureau: baseScore 720 minus 1 inquiry × 30 = 690
   await expect(page.getByTestId('bureau-score')).toHaveText('690');
   await expect(page.getByTestId('bureau-hard-inquiries')).toHaveText('1');
+
+  // v4 — alt_score: Maria Lopez Vargas → 78 / 100 with 3 signals
+  await expect(page.getByTestId('alt-score-value')).toHaveText('78 / 100');
+  const signals = page.getByTestId('alt-score-signals');
+  await expect(signals).toContainText('stable_spending');
+  await expect(signals).toContainText('no_chargebacks');
+  await expect(signals).toContainText('long_account_history');
 
   // No saga banner on happy path
   await expect(page.getByTestId('saga-banner')).not.toBeVisible();
