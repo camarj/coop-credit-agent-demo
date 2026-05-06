@@ -87,13 +87,35 @@ Una funcion que un agente LLM puede invocar. Tiene schema Zod estricto para inpu
 Lista explicita de tool names que cada agente puede invocar. Declarada en `agents/{name}/config.ts`. Guard en runtime emite `UnauthorizedToolError` si un agente intenta usar un tool fuera de su lista. Ej: `policy.allowedTools = ['rag.retrieve', 'rag.rerank']`.
 
 **Confidence:**
-Numero en `[0, 1]` adjunto a cada `Decision`. **Es funcion deterministica de las senales upstream** (resultados de los agentes anteriores) — NO es autoasignada por el LLM. El LLM solo redacta la justificacion en lenguaje natural.
+Numero en `[0, 1]` adjunto a cada `Decision`. **Es funcion deterministica de las senales upstream** (resultados de los agentes anteriores) — NO es autoasignada por el LLM. El LLM solo redacta la justificacion en lenguaje natural. La semantica del campo depende del `decisionType`: para `hard_reject` siempre es `1.0` (certeza regulatoria); para `llm_decision` es estimacion estadistica calibrable.
 
 **Confidence threshold:**
-Umbral configurable (default `0.75`, env var `CONFIDENCE_THRESHOLD`). Si `confidence < threshold`, la `Decision` se marca para escalar a oficial humano explicitamente — la decision sigue siendo "sugerida" pero la UI la presenta distinta.
+Umbral configurable (default `0.75`, env var `CONFIDENCE_THRESHOLD`). Solo aplica cuando `decisionType === 'llm_decision'`. Si `confidence < threshold`, la `Decision` se marca para escalar a oficial humano explicitamente — la decision sigue siendo "sugerida" pero la UI la presenta distinta. Los hard rejects NUNCA pasan por este umbral; siempre se escalan a un oficial con etiqueta diferente.
+
+**Decision type:**
+Discriminador del origen de la `Decision`. Dos valores:
+- `hard_reject` — produced por `preDecide()`, una funcion pura sobre senales autoritativas (Registro Civil, IESS, bureau). Bypassea el LLM. **Reservado para casos constitucionales** — situaciones donde NO existe ningun caso de negocio razonable bajo el cual aprobar (menor de edad, persona fallecida, sobreendeudamiento computable con datos verificables). NO se usa para reglas de negocio variables (ej. tope etario, productos especiales) que podrian tener overrides.
+- `llm_decision` — producido por `computeConfidence()` deterministico + LLM call que redacta `reason`. Cubre todo lo demas (la mayoria de los casos).
+
+El campo es un discriminador explicito en el output del agente; downstream (UI, analytics, eval) filtra por el primero antes de leer `confidence` para evitar mezclar "certeza regulatoria" con "estimacion estadistica del modelo".
+
+**Hard reject (rechazo automatico):**
+Una `Decision = REJECTED` producida por `preDecide()` sin invocar el LLM. Tres categorias hoy:
+1. **Suplantacion de identidad** — Registro Civil reporta cedula como fallecida (espejo de `EXC-001`)
+2. **Capacidad legal** — solicitante menor de 18 anios (espejo de la mitad "menor" de `EXC-002`; el techo etario `>75` NO es hard reject porque algunas cooperativas ofrecen producto senior con codeudor — esa parte queda como soft signal en confidence)
+3. **Sobreendeudamiento computable** — `(deudas_bureau + cuota_proyectada) / income.salary > 0.5`. Solo aplica cuando `income.salary` viene del IESS (autoritativo); para autonomos sin IESS no hay sueldo verificado, asi que no se evalua hard — pasa al confidence con peso menor (espejo de `EXC-003`).
+
+**Reglas constitucionales:**
+Las que entran a `preDecide()`. Criterio de inclusion: **"NO existe ningun caso de negocio razonable donde aprobar este perfil sea aceptable"**. Si la respuesta es "depende, hay overrides posibles", la regla NO es constitucional — va a la formula soft de confidence. Esto evita que `preDecide()` se vuelva el contenedor de toda la logica de negocio.
+
+**Audit trail (auditabilidad):**
+Cada `Decision` (hard o soft) persiste suficiente metadata para que un regulador o auditor reconstruya la decision sin correr el sistema. Para hard rejects: `triggeredBy: { field, value, computed }` capturando el campo del state que disparo la regla, su valor crudo, y cualquier valor derivado (ej. edad calculada de birthDate). Para llm_decision: `confidence` numerico, breakdown de senales con peso, `reason` del LLM, `citedRules` que aparecen en el manual.
+
+**Fuente autoritativa:**
+Un dato es "autoritativo" cuando proviene de un cruce con sistema externo verificable (Registro Civil, IESS, bureau Equifax, SRI). Datos auto-declarados en el formulario (`state.ingresos`, `state.monto`, `state.plazo`) NO son autoritativos. La red de seguridad de `preDecide()` solo es valida sobre inputs autoritativos: si el dato es LLM-extracted, OCR sin verificar o auto-declarado, no se puede considerar safety net regulatoria.
 
 **Token budget:**
-Limite hard de tokens (input + output) consumibles por una `Solicitud` completa. Default `50_000`, env var `TOKEN_BUDGET_PER_APPLICATION`. Si la suma excede, el orchestrator detiene la pipeline, marca la solicitud como `REVIEW` con razon `token_budget_exceeded`, y dispara la saga.
+Limite hard de tokens (input + output) consumibles por una `Solicitud` completa. Default `50_000`, env var `TOKEN_BUDGET_PER_APPLICATION`. Si la suma excede, el orchestrator detiene la pipeline, marca la solicitud como `REVIEW` con razon `token_budget_exceeded`, y dispara la saga. **Estado actual (post-slice 7):** _counting only_ — los tokens consumidos por agente se persisten en `application_token_usage` (tabla nueva) pero el enforcement contra el threshold no esta implementado. Slice 9 cierra enforcement con threshold operativo recalibrado desde la data persistida. Ver ADR-0008 seccion 9.
 
 **Idempotency key:**
 UUID generado client-side incluido en cada submit de solicitud. Constraint `UNIQUE` en DB previene duplicados ante doble-click o retries de red. Si llega un submit con un key ya procesado, el API devuelve la decision existente sin re-procesar.

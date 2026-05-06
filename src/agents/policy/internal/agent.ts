@@ -192,6 +192,11 @@ export const policyAgent: Agent<PolicyInput, PolicyOutput> = {
         span.setAttribute('llm.tokens.input', llmResult.usage.inputTokens);
         span.setAttribute('llm.tokens.output', llmResult.usage.outputTokens);
 
+        // Token usage publication. Slice 7 (ADR-0008 sec 9): orchestrator
+        // recolecta y persiste batch a application_token_usage. Tests del
+        // policyAgent NO inyectan callback, asi que el call es no-op.
+        ctx.onLlmCall?.('policy', llmResult.usage);
+
         const output = parseAndValidateOutput(llmResult.text);
         span.setAttribute('policy.applies_count', output.applies.length);
         return output;

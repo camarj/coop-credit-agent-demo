@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { eq, desc } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { intakeService } from '@/services/intake';
 import { runOrchestrator, defaultPipeline } from '@/orchestrator';
 import { ConsoleTracer } from '@/lib/tracer';
@@ -8,11 +10,27 @@ import { OperationalError, DomainError } from '@/lib/errors';
 import { db } from '@/db/client';
 import { applicationStates } from '@/db/schema';
 import { ensureDeps as ensurePolicyDeps } from '@/agents/policy';
+import { ensureDeps as ensureDecisionDeps } from '@/agents/decision';
 import { createRAGRetriever } from '@/lib/rag/retriever';
 import { createOpenAIEmbedClient } from '@/lib/rag/embed-client';
 import { createLlmClient } from '@/lib/llm';
+import { parsePolicyCorpus } from '@/lib/rag/parser';
 
 const tracer = new ConsoleTracer();
+
+function loadPolicyChunkLookup(): Map<string, { ruleId: string; fullText: string }> {
+  try {
+    const corpusPath = path.resolve(
+      process.cwd(),
+      'docs/policy/cooperativa-policy.md',
+    );
+    const source = readFileSync(corpusPath, 'utf-8');
+    const chunks = parsePolicyCorpus(source);
+    return new Map(chunks.map((c) => [c.ruleId, { ruleId: c.ruleId, fullText: c.fullText }]));
+  } catch {
+    return new Map();
+  }
+}
 
 function bootstrapPolicyDeps() {
   ensurePolicyDeps(() => ({
@@ -24,6 +42,13 @@ function bootstrapPolicyDeps() {
     }),
     llm: createLlmClient({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' }),
   }));
+}
+
+function bootstrapDecisionDeps() {
+  ensureDecisionDeps({
+    llmFactory: () => createLlmClient({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' }),
+    chunksFactory: () => loadPolicyChunkLookup(),
+  });
 }
 
 async function readLatestVersion(applicationId: string): Promise<number> {
@@ -38,6 +63,7 @@ async function readLatestVersion(applicationId: string): Promise<number> {
 
 export async function POST(request: Request): Promise<Response> {
   bootstrapPolicyDeps();
+  bootstrapDecisionDeps();
   let body: unknown;
   try {
     body = await request.json();
