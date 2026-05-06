@@ -6,6 +6,8 @@ import {
   timestamp,
   jsonb,
   unique,
+  vector,
+  index,
 } from 'drizzle-orm/pg-core';
 
 /**
@@ -50,5 +52,40 @@ export const applicationStates = pgTable(
   ],
 );
 
+/**
+ * `rag_chunks` is the RAG corpus persisted with pgvector. Each row is one
+ * rule from `docs/policy/cooperativa-policy.md` — chunked at the rule
+ * boundary (no sliding window). The `embedding` column is the OpenAI
+ * text-embedding-3-small (1536 dims) of `title + condicion + accion +
+ * tags-flatten` — see ADR-0007 section 4a.
+ *
+ * The table is **truncated and re-ingested** by the `pnpm rag:ingest`
+ * script — corpus is rebuilt from source-of-truth, not merged. Therefore
+ * no immutability trigger is attached (unlike applications / states).
+ */
+export const ragChunks = pgTable(
+  'rag_chunks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ruleId: text('rule_id').notNull(),
+    category: text('category').notNull(),
+    title: text('title').notNull(),
+    fullText: text('full_text').notNull(),
+    embedding: vector('embedding', { dimensions: 1536 }).notNull(),
+    metadata: jsonb('metadata').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique('rag_chunks_rule_id_unique').on(table.ruleId),
+    index('rag_chunks_embedding_hnsw_idx').using(
+      'hnsw',
+      table.embedding.op('vector_cosine_ops'),
+    ),
+  ],
+);
+
 export type Application = typeof applications.$inferSelect;
 export type ApplicationState = typeof applicationStates.$inferSelect;
+export type RagChunk = typeof ragChunks.$inferSelect;

@@ -39,8 +39,8 @@ beforeEach(async () => {
 
 afterAll(closeDb);
 
-describe('runOrchestrator — happy path identity → income → [bureau ‖ alt_score]', () => {
-  it('produces v1, v2, v3 (bureau, by array order), v4 (alt_score, by array order)', async () => {
+describe('runOrchestrator — happy path identity → income → [bureau ‖ alt_score] → policy', () => {
+  it('produces v0..v5 with policy at v5 (mocked LLM returns MIC-003)', async () => {
     const tracer = new RecordingTracer();
     const target = personas.find(
       (p) => p.employment !== undefined && p.altScore !== undefined,
@@ -59,7 +59,7 @@ describe('runOrchestrator — happy path identity → income → [bureau ‖ alt
     await runOrchestrator(intake.applicationId, { tracer }, defaultPipeline);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(5);
+    expect(states).toHaveLength(6);
 
     const v3 = states.find((s) => s.version === 3)!;
     expect(v3.createdByAgent).toBe('bureau');
@@ -71,6 +71,11 @@ describe('runOrchestrator — happy path identity → income → [bureau ‖ alt
     expect(v4.createdByAgent).toBe('alt_score');
     const v4c = v4.contribution as { alt_score: { score: number; signals: string[] } };
     expect(v4c.alt_score.score).toBe(target.altScore!.score);
+
+    const v5 = states.find((s) => s.version === 5)!;
+    expect(v5.createdByAgent).toBe('policy');
+    const v5c = v5.contribution as { policy: { applies: string[]; notes: string } };
+    expect(v5c.policy.applies).toEqual(['MIC-003']);
   });
 
   it('parallel branch one failing does NOT change the other branch version', async () => {

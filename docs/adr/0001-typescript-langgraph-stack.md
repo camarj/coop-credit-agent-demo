@@ -120,6 +120,15 @@ Razones:
 
 **Trade-off conocido:** cold starts de Neon (~sub-segundo en primer request despues de inactividad). Mitigar con warmup ping antes de sesiones de pitch. No es bloqueante.
 
-### Vercel AI SDK vs Anthropic SDK directo → **PENDIENTE**
+### Vercel AI SDK vs Anthropic SDK directo → **RESUELTO en slice 6 (2026-05-06): Anthropic SDK directo**
 
-No bloquea las primeras slices (intake no llama LLM). Se resuelve cuando llegue la slice del agente `policy` o `decision`. Default tentativo: Anthropic SDK directo para no agregar abstraccion innecesaria, salvo que necesitemos features especificos del Vercel AI SDK (streaming helpers, tool calling helpers).
+Cerrado durante la sesion de `grill-with-docs` que abrio slice 6 (policyAgent). Decision final:
+
+- **Cliente LLM:** `@anthropic-ai/sdk` directo, encapsulado en `src/lib/llm.ts` con interfaz pequena (`generate(...)`).
+- **Razones:**
+  1. Multi-provider switching (la unica venta real de Vercel AI SDK) no aplica a este demo. La cooperativa regulada no rota providers; el caso de estudio se ancla a Claude.
+  2. La UI no es chat — los helpers `useChat` / `streamText` son zero valor aqui.
+  3. Acceso directo a features avanzadas de Claude (prompt caching para RAG system prompts, betas) sin esperar a que un wrapper los porte.
+  4. Coherencia narrativa del demo: "este es el prompt que se manda a Claude" muestra el SDK literal, no una abstraccion.
+- **Estrategia de fallback:** wrapper con el mismo `withCircuitBreaker` que envuelve los mocks externos (`src/lib/circuit-breaker.ts`). Si el breaker se abre con el modelo primary (Sonnet), el retry hace **graceful degradation intra-proveedor** bajando a Haiku — el demo sigue corriendo con confidence menor en lugar de caerse. Sin fallback inter-proveedor.
+- **Que NO se decidio aqui:** si meter LangGraph o seguir con el orchestrator custom propio. Eso queda para evaluar cuando llegue branching condicional (slice del `decisionAgent`). El orchestrator actual cubre serial + paralelo + saga sin friccion.

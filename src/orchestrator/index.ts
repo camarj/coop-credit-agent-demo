@@ -10,6 +10,7 @@ import { identityAgent } from '@/agents/identity';
 import { incomeAgent } from '@/agents/income';
 import { bureauAgent } from '@/agents/bureau';
 import { altScoreAgent } from '@/agents/alt_score';
+import { policyAgent } from '@/agents/policy';
 
 /**
  * Type alias for an agent with concrete IO types erased — used when the
@@ -33,6 +34,7 @@ export const defaultPipeline: Pipeline = [
   identityAgent,
   incomeAgent,
   [bureauAgent, altScoreAgent],
+  policyAgent,
 ];
 
 interface RanAgent {

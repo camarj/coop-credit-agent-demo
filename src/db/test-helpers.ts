@@ -6,6 +6,11 @@ export async function resetDb(): Promise<void> {
   await db.execute(sql`TRUNCATE TABLE application_states, applications CASCADE`);
 }
 
+/** Wipes the RAG corpus table — used by retriever tests that seed fake chunks. */
+export async function resetRagChunks(): Promise<void> {
+  await db.execute(sql`TRUNCATE TABLE rag_chunks`);
+}
+
 /** Closes the underlying connection pool — call from `afterAll` to let vitest exit cleanly. */
 export async function closeDb(): Promise<void> {
   await pool.end();
