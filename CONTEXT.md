@@ -25,8 +25,12 @@ El humano de la cooperativa que toma la decision final basandose en la decision 
 _Avoid:_ analista, ejecutivo
 
 **Politica de credito:**
-El conjunto de reglas internas de la cooperativa que determinan si una solicitud califica. Vive como PDF/markdown sintetico para el demo. Es el corpus del RAG.
+El conjunto de reglas internas de la cooperativa que determinan si una solicitud califica. Vive como un solo markdown sintetico en `docs/policy/cooperativa-policy.md` — escrito como una cooperativa real escribiria su manual. Cada regla es un bloque autocontenido con frontmatter (ID estable, condicion en lenguaje natural, accion sugerida, tags). Es el corpus del RAG.
 _Avoid:_ reglamento, normativa
+
+**Regla de politica:**
+La unidad atomica del corpus de politica. Tiene `id` estable (`MIC-001`, `GAR-003`, etc.), `condicion` en lenguaje natural (ej. "solicitante sin afiliacion IESS, sin RUC activo"), `accion` sugerida (ej. "monto maximo USD 2,500, plazo maximo 36 meses") y `justificacion` corta. Cada regla es **un chunk natural del RAG** — no se chunkea con sliding window porque la regla ya es la unidad semantica. La UI cita las reglas que aplicaron usando su ID (`MIC-001`, `MIC-007`) como chips clicables, no snippets de prosa.
+_Avoid:_ politica (es ambiguo entre "el corpus" y "una regla individual")
 
 **Monto:**
 La cantidad solicitada en USD (Ecuador usa dolar americano).

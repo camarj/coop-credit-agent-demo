@@ -1,7 +1,27 @@
 import { notFound } from 'next/navigation';
 import { eq, asc } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { db } from '@/db/client';
 import { applications, applicationStates } from '@/db/schema';
+import { parsePolicyCorpus } from '@/lib/rag/parser';
+import type { PolicyChunk } from '@/lib/rag/types';
+
+// Load and parse the policy corpus once at module load. Drives the rule-id
+// → fullText lookup used by the v5 panel to render rule cards on demand.
+const policyChunksByRuleId: Map<string, PolicyChunk> = (() => {
+  try {
+    const corpusPath = path.resolve(
+      process.cwd(),
+      'docs/policy/cooperativa-policy.md',
+    );
+    const source = readFileSync(corpusPath, 'utf-8');
+    const chunks = parsePolicyCorpus(source);
+    return new Map(chunks.map((c) => [c.ruleId, c]));
+  } catch {
+    return new Map();
+  }
+})();
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -45,6 +65,13 @@ interface AltScoreContribution {
   alt_score: {
     score: number;
     signals: string[];
+  };
+}
+
+interface PolicyContribution {
+  policy: {
+    applies: string[];
+    notes: string;
   };
 }
 
@@ -105,6 +132,12 @@ export default async function ApplicationPage({ params }: PageProps) {
     | undefined;
   const altScore = altScoreContribution?.alt_score;
 
+  const policyRow = states.find((s) => s.createdByAgent === 'policy');
+  const policyContribution = policyRow?.contribution as
+    | PolicyContribution
+    | undefined;
+  const policy = policyContribution?.policy;
+
   const sagaRow = states.find((s) => s.createdByAgent === 'orchestrator');
   const sagaContribution = sagaRow?.contribution as
     | SagaContribution
@@ -116,13 +149,17 @@ export default async function ApplicationPage({ params }: PageProps) {
   const incomeResolved = income !== undefined;
   const bureauResolved = bureau !== undefined;
   const altScoreResolved = altScore !== undefined;
+  const policyResolved = policy !== undefined;
 
   const leadCopy = (() => {
     if (saga) {
       return 'Solicitud terminada con saga ejecutada — los efectos colaterales fueron revertidos.';
     }
+    if (policyResolved) {
+      return 'Pipeline completo: identidad, ingresos, bureau, score alternativo y política aplicada.';
+    }
     if (bureauResolved && altScoreResolved) {
-      return 'Pipeline completo: identidad, ingresos, bureau y score alternativo.';
+      return 'Identidad, ingresos, bureau y score alternativo listos. Política pendiente.';
     }
     if (bureauResolved || altScoreResolved) {
       return 'Identidad e ingresos verificados. Una de las dos ramas paralelas (bureau / score alternativo) no completó.';
@@ -367,6 +404,104 @@ export default async function ApplicationPage({ params }: PageProps) {
             >
               Pendiente. La fuente de datos alternativos no cubrió a este
               solicitante en este intento.
+            </p>
+          )}
+        </article>
+
+        <hr className="hairline" />
+
+        <article data-testid="state-v5">
+          <div className="entry-meta mb-4">
+            <span className="cat">v5</span>
+            <span>·</span>
+            <span>POLICY</span>
+            {policyRow && (
+              <>
+                <span>·</span>
+                <span>{new Date(policyRow.createdAt).toISOString()}</span>
+              </>
+            )}
+          </div>
+          <h3 className="mb-4" data-testid="policy-heading">
+            Política aplicada
+          </h3>
+          {policy ? (
+            <div className="space-y-6 text-[var(--fg)]">
+              <div>
+                <dt className="text-[var(--fg-muted)] mb-2">
+                  Reglas aplicables
+                </dt>
+                {policy.applies.length > 0 ? (
+                  <dd
+                    data-testid="policy-applies"
+                    className="flex flex-wrap gap-2"
+                  >
+                    {policy.applies.map((ruleId) => (
+                      <span
+                        key={ruleId}
+                        data-testid={`policy-rule-${ruleId}`}
+                        className="font-mono text-[11px] uppercase tracking-[0.08em] bg-[var(--accent-wash)] text-[var(--accent)] px-2 py-1 rounded-[2px]"
+                      >
+                        {ruleId}
+                      </span>
+                    ))}
+                  </dd>
+                ) : (
+                  <dd
+                    data-testid="policy-applies-empty"
+                    className="text-[var(--fg-muted)] italic"
+                  >
+                    Ninguna regla del manual aplica claramente a este perfil.
+                  </dd>
+                )}
+              </div>
+
+              <div>
+                <dt className="text-[var(--fg-muted)] mb-2">
+                  Razonamiento del modelo
+                </dt>
+                <dd
+                  data-testid="policy-notes"
+                  className="serif-italic text-[var(--fg-muted)]"
+                >
+                  {policy.notes}
+                </dd>
+              </div>
+
+              {policy.applies.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[var(--fg-muted)] text-sm hover:text-[var(--accent)]">
+                    Ver el texto completo de cada regla aplicada
+                  </summary>
+                  <div className="mt-4 space-y-6 border-l-2 border-[var(--rule)] pl-4">
+                    {policy.applies.map((ruleId) => {
+                      const chunk = policyChunksByRuleId.get(ruleId);
+                      return (
+                        <div key={ruleId} data-testid={`policy-rule-detail-${ruleId}`}>
+                          {chunk ? (
+                            <pre className="whitespace-pre-wrap font-sans text-sm text-[var(--fg)]">
+                              {chunk.fullText}
+                            </pre>
+                          ) : (
+                            <p className="text-[var(--fg-subtle)] text-sm">
+                              Regla {ruleId} citada por el modelo pero no
+                              encontrada en el corpus actual.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              )}
+            </div>
+          ) : (
+            <p
+              className="text-[var(--fg-muted)]"
+              data-testid="policy-pending"
+            >
+              Pendiente. La evaluación de política no se completó para esta
+              solicitud.
             </p>
           )}
         </article>

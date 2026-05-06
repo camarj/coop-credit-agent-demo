@@ -7,8 +7,24 @@ import { ConsoleTracer } from '@/lib/tracer';
 import { OperationalError, DomainError } from '@/lib/errors';
 import { db } from '@/db/client';
 import { applicationStates } from '@/db/schema';
+import { ensureDeps as ensurePolicyDeps } from '@/agents/policy';
+import { createRAGRetriever } from '@/lib/rag/retriever';
+import { createOpenAIEmbedClient } from '@/lib/rag/embed-client';
+import { createLlmClient } from '@/lib/llm';
 
 const tracer = new ConsoleTracer();
+
+function bootstrapPolicyDeps() {
+  ensurePolicyDeps(() => ({
+    retriever: createRAGRetriever({
+      db,
+      embedClient: createOpenAIEmbedClient({
+        apiKey: process.env.OPENAI_API_KEY ?? '',
+      }),
+    }),
+    llm: createLlmClient({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' }),
+  }));
+}
 
 async function readLatestVersion(applicationId: string): Promise<number> {
   const [row] = await db
@@ -21,6 +37,7 @@ async function readLatestVersion(applicationId: string): Promise<number> {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  bootstrapPolicyDeps();
   let body: unknown;
   try {
     body = await request.json();

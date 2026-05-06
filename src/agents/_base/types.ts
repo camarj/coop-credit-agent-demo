@@ -34,6 +34,10 @@ export interface FullState {
     score: number;
     signals: string[];
   };
+  policy?: {
+    applies: string[]; // rule IDs (e.g., 'MIC-001')
+    notes: string;
+  };
 
   /**
    * Reserved namespace owned by the orchestrator (not by an agent).
