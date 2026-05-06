@@ -1,6 +1,11 @@
-import type { Agent, ExecCtx } from '@/agents/_base/types';
+import type {
+  Agent,
+  ExecCtx,
+  TokenUsage,
+  OnLlmCall,
+} from '@/agents/_base/types';
 import { db } from '@/db/client';
-import { applicationStates } from '@/db/schema';
+import { applicationStates, applicationTokenUsage } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import {
   getLatestFullState,
@@ -11,6 +16,7 @@ import { incomeAgent } from '@/agents/income';
 import { bureauAgent } from '@/agents/bureau';
 import { altScoreAgent } from '@/agents/alt_score';
 import { policyAgent } from '@/agents/policy';
+import { decisionAgent } from '@/agents/decision';
 
 /**
  * Type alias for an agent with concrete IO types erased — used when the
@@ -35,6 +41,7 @@ export const defaultPipeline: Pipeline = [
   incomeAgent,
   [bureauAgent, altScoreAgent],
   policyAgent,
+  decisionAgent,
 ];
 
 interface RanAgent {
@@ -162,12 +169,37 @@ async function walkBackSaga(
   });
 }
 
+interface TokenUsageRecord {
+  agentName: string;
+  usage: TokenUsage;
+}
+
+async function persistTokenUsages(
+  applicationId: string,
+  records: TokenUsageRecord[],
+): Promise<void> {
+  if (records.length === 0) return;
+  await db.insert(applicationTokenUsage).values(
+    records.map((r) => ({
+      applicationId,
+      agentName: r.agentName,
+      inputTokens: r.usage.inputTokens,
+      outputTokens: r.usage.outputTokens,
+    })),
+  );
+}
+
 /**
- * Slice 5 orchestrator. Accepts a pipeline of steps where each step is a
+ * Slice 7 orchestrator. Accepts a pipeline of steps where each step is a
  * single agent or an array of agents to run in parallel. On any failure,
  * walks back through completed steps (LIFO across steps, concurrent within
  * a parallel step), calling compensate() and persisting a __saga row.
  * Re-throws the original error.
+ *
+ * Token usage: a recorder collects each agent's `onLlmCall` publication and
+ * persists the batch to `application_token_usage` at the end of the run
+ * (success path). On failure paths the partial usages are still persisted
+ * so audit trail is not lost. See ADR-0008 section 9.
  */
 export async function runOrchestrator(
   applicationId: string,
@@ -180,10 +212,25 @@ export async function runOrchestrator(
     async (span) => {
       span.addEvent('orchestrator.start');
       const ranSteps: RanStep[] = [];
+      const tokenRecords: TokenUsageRecord[] = [];
+
+      // Build a recorder that publishes into the local array. If the caller
+      // provided their own onLlmCall, chain so external observers still see
+      // each event (preserves Langfuse / metrics integrations downstream).
+      const externalOnLlmCall = ctx.onLlmCall;
+      const recordingOnLlmCall: OnLlmCall = (agentName, usage) => {
+        tokenRecords.push({ agentName, usage });
+        externalOnLlmCall?.(agentName, usage);
+      };
+      const ctxWithRecorder: ExecCtx = { ...ctx, onLlmCall: recordingOnLlmCall };
 
       try {
         for (const step of pipeline) {
-          const { ran, failure } = await runStep(step, applicationId, ctx);
+          const { ran, failure } = await runStep(
+            step,
+            applicationId,
+            ctxWithRecorder,
+          );
           if (failure) {
             ranSteps.push(ran); // partial successes still need compensation
             span.addEvent('orchestrator.step_failed', {
@@ -193,13 +240,33 @@ export async function runOrchestrator(
           }
           ranSteps.push(ran);
         }
+
+        await persistTokenUsages(applicationId, tokenRecords);
+        const totalIn = tokenRecords.reduce(
+          (s, r) => s + r.usage.inputTokens,
+          0,
+        );
+        const totalOut = tokenRecords.reduce(
+          (s, r) => s + r.usage.outputTokens,
+          0,
+        );
+        span.setAttribute('tokens.total.input', totalIn);
+        span.setAttribute('tokens.total.output', totalOut);
+        span.setAttribute('tokens.total', totalIn + totalOut);
         span.addEvent('orchestrator.complete');
       } catch (err) {
+        // Persist partial usages on failure too — audit trail does not lose
+        // tokens just because pipeline aborted.
+        await persistTokenUsages(applicationId, tokenRecords).catch(() => {
+          // Persistence failure on saga path is swallowed so it does not mask
+          // the original error.
+        });
+
         const reason =
           err instanceof Error
             ? `${err.constructor.name}: ${err.message}`
             : String(err);
-        await walkBackSaga(ranSteps, reason, applicationId, ctx);
+        await walkBackSaga(ranSteps, reason, applicationId, ctxWithRecorder);
         throw err;
       }
     },

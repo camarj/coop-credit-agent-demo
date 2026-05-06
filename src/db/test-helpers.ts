@@ -3,7 +3,9 @@ import { db, pool } from './client';
 
 /** Wipes all rows. Allowed in tests because TRUNCATE bypasses the immutability triggers. */
 export async function resetDb(): Promise<void> {
-  await db.execute(sql`TRUNCATE TABLE application_states, applications CASCADE`);
+  await db.execute(
+    sql`TRUNCATE TABLE application_states, application_token_usage, applications CASCADE`,
+  );
 }
 
 /** Wipes the RAG corpus table — used by retriever tests that seed fake chunks. */

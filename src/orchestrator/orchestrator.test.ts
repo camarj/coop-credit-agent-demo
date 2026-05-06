@@ -39,8 +39,8 @@ beforeEach(async () => {
 
 afterAll(closeDb);
 
-describe('runOrchestrator — happy path identity → income → [bureau ‖ alt_score] → policy', () => {
-  it('produces v0..v5 with policy at v5 (mocked LLM returns MIC-003)', async () => {
+describe('runOrchestrator — happy path identity → income → [bureau ‖ alt_score] → policy → decision', () => {
+  it('produces v0..v6 with decision at v6 (mocked LLM)', async () => {
     const tracer = new RecordingTracer();
     const target = personas.find(
       (p) => p.employment !== undefined && p.altScore !== undefined,
@@ -59,7 +59,7 @@ describe('runOrchestrator — happy path identity → income → [bureau ‖ alt
     await runOrchestrator(intake.applicationId, { tracer }, defaultPipeline);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(6);
+    expect(states).toHaveLength(7);
 
     const v3 = states.find((s) => s.version === 3)!;
     expect(v3.createdByAgent).toBe('bureau');
@@ -76,6 +76,20 @@ describe('runOrchestrator — happy path identity → income → [bureau ‖ alt
     expect(v5.createdByAgent).toBe('policy');
     const v5c = v5.contribution as { policy: { applies: string[]; notes: string } };
     expect(v5c.policy.applies).toEqual(['MIC-003']);
+
+    const v6 = states.find((s) => s.version === 6)!;
+    expect(v6.createdByAgent).toBe('decision');
+    const v6c = v6.contribution as {
+      decision: {
+        decision: 'APPROVED' | 'REJECTED' | 'REVIEW';
+        decisionType: 'hard_reject' | 'llm_decision';
+        confidence: number;
+      };
+    };
+    // Maria-tier afiliado IESS sólido — debería ser APPROVED por confidence alto.
+    expect(v6c.decision.decision).toBe('APPROVED');
+    expect(v6c.decision.decisionType).toBe('llm_decision');
+    expect(v6c.decision.confidence).toBeGreaterThan(0.7);
   });
 
   it('parallel branch one failing does NOT change the other branch version', async () => {

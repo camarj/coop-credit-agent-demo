@@ -38,6 +38,32 @@ export interface FullState {
     applies: string[]; // rule IDs (e.g., 'MIC-001')
     notes: string;
   };
+  decision?: {
+    decision: 'APPROVED' | 'REJECTED' | 'REVIEW';
+    decisionType: 'hard_reject' | 'llm_decision';
+    confidence: number;
+    llmBypassed: boolean;
+    reason: string;
+    citedRules: string[];
+    // Hard reject only:
+    triggeredBy?: {
+      field: string;
+      source: 'registro_civil' | 'iess' | 'bureau' | 'derived';
+      value: unknown;
+      computed?: Record<string, unknown>;
+    };
+    // LLM decision only:
+    breakdown?: Array<{
+      signal: string;
+      weight: number;
+      rawValue: number | null;
+      contribution: number;
+      weighted: number;
+    }>;
+    modelRequested?: string;
+    modelActual?: string;
+    degraded?: boolean;
+  };
 
   /**
    * Reserved namespace owned by the orchestrator (not by an agent).
@@ -52,8 +78,22 @@ export interface FullState {
   };
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * Optional callback invoked by agents that call the LLM. The orchestrator
+ * collects the published usages and persists them in batch to
+ * `application_token_usage`. Tests pass `undefined` and the agent skips
+ * the publication. See ADR-0008 section 9.
+ */
+export type OnLlmCall = (agentName: string, usage: TokenUsage) => void;
+
 export interface ExecCtx {
   tracer: Tracer;
+  onLlmCall?: OnLlmCall;
 }
 
 /**

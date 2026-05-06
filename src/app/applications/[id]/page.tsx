@@ -75,6 +75,35 @@ interface PolicyContribution {
   };
 }
 
+interface SignalContributionRow {
+  signal: string;
+  weight: number;
+  rawValue: number | null;
+  contribution: number;
+  weighted: number;
+}
+
+interface DecisionContribution {
+  decision: {
+    decision: 'APPROVED' | 'REJECTED' | 'REVIEW';
+    decisionType: 'hard_reject' | 'llm_decision';
+    confidence: number;
+    llmBypassed: boolean;
+    reason: string;
+    citedRules: string[];
+    triggeredBy?: {
+      field: string;
+      source: string;
+      value: unknown;
+      computed?: Record<string, unknown>;
+    };
+    breakdown?: SignalContributionRow[];
+    modelRequested?: string;
+    modelActual?: string;
+    degraded?: boolean;
+  };
+}
+
 interface SagaContribution {
   __saga: {
     compensated: string[];
@@ -138,6 +167,12 @@ export default async function ApplicationPage({ params }: PageProps) {
     | undefined;
   const policy = policyContribution?.policy;
 
+  const decisionRow = states.find((s) => s.createdByAgent === 'decision');
+  const decisionContribution = decisionRow?.contribution as
+    | DecisionContribution
+    | undefined;
+  const decision = decisionContribution?.decision;
+
   const sagaRow = states.find((s) => s.createdByAgent === 'orchestrator');
   const sagaContribution = sagaRow?.contribution as
     | SagaContribution
@@ -155,8 +190,18 @@ export default async function ApplicationPage({ params }: PageProps) {
     if (saga) {
       return 'Solicitud terminada con saga ejecutada — los efectos colaterales fueron revertidos.';
     }
+    if (decision) {
+      if (decision.decisionType === 'hard_reject') {
+        const ruleId = decision.citedRules[0] ?? 'EXC-???';
+        return `Solicitud rechazada por regla constitucional (${ruleId}). Auditoría disponible abajo.`;
+      }
+      if (decision.decision === 'APPROVED') {
+        return 'Solicitud lista para aprobación con las condiciones citadas.';
+      }
+      return 'Solicitud requiere revisión humana. Lee el razonamiento abajo.';
+    }
     if (policyResolved) {
-      return 'Pipeline completo: identidad, ingresos, bureau, score alternativo y política aplicada.';
+      return 'Pipeline completo: identidad, ingresos, bureau, score alternativo y política aplicada. Decisión pendiente.';
     }
     if (bureauResolved && altScoreResolved) {
       return 'Identidad, ingresos, bureau y score alternativo listos. Política pendiente.';
@@ -171,6 +216,37 @@ export default async function ApplicationPage({ params }: PageProps) {
       return 'Identidad verificada. Ingresos pendientes — el agente de income no completó.';
     }
     return 'Identidad pendiente — el agente de identidad no completó.';
+  })();
+
+  // Decision UI tokens — tokens warm/terrosos del design system v2 (ver
+  // .claude/rules/inteliside-design-light.md). NO hardcodear hex en JSX.
+  const decisionStyle = (() => {
+    if (!decision) return null;
+    if (decision.decision === 'APPROVED') {
+      return {
+        bg: 'bg-[#EAF4F5]',
+        border: 'border-[#1F6F78]',
+        textAccent: 'text-[#1F6F78]',
+        label: '',
+        cat: 'APROBADA',
+      };
+    }
+    if (decision.decision === 'REJECTED') {
+      return {
+        bg: 'bg-[#F2E0DC]',
+        border: 'border-[#B64545]',
+        textAccent: 'text-[#B64545]',
+        label: 'NOTIFICAR AL CLIENTE',
+        cat: 'RECHAZO AUTOMATICO',
+      };
+    }
+    return {
+      bg: 'bg-[#F5EFE0]',
+      border: 'border-[#C67E2F]',
+      textAccent: 'text-[#C67E2F]',
+      label: 'ESCALADA A HUMANO',
+      cat: 'EN REVISION',
+    };
   })();
 
   return (
@@ -210,6 +286,89 @@ export default async function ApplicationPage({ params }: PageProps) {
           <p className="text-[var(--fg-muted)] text-sm mt-1">
             Razón: <span data-testid="saga-reason">{saga.reason}</span>
           </p>
+        </aside>
+      )}
+
+      {decision && decisionStyle && (
+        <aside
+          className={`mt-10 border-l-4 ${decisionStyle.border} ${decisionStyle.bg} px-6 py-5`}
+          data-testid="decision-banner"
+          data-decision={decision.decision}
+          data-decision-type={decision.decisionType}
+        >
+          <div className="entry-meta mb-3">
+            <span className={`cat ${decisionStyle.textAccent}`}>
+              DECISION SUGERIDA
+            </span>
+            <span>·</span>
+            <span data-testid="decision-cat">{decisionStyle.cat}</span>
+            {decisionStyle.label && (
+              <>
+                <span>·</span>
+                <span
+                  data-testid="decision-action-label"
+                  className="font-mono text-[10px] tracking-[0.1em]"
+                >
+                  {decisionStyle.label}
+                </span>
+              </>
+            )}
+            {decision.degraded && (
+              <>
+                <span>·</span>
+                <span
+                  data-testid="decision-degraded-label"
+                  className="font-mono text-[10px] tracking-[0.1em] text-[#C67E2F]"
+                >
+                  MODO DEGRADADO
+                </span>
+              </>
+            )}
+          </div>
+          <h2 className={`text-3xl font-serif ${decisionStyle.textAccent}`}>
+            {decision.decision === 'APPROVED'
+              ? 'Aprobada'
+              : decision.decision === 'REJECTED'
+                ? 'Rechazada'
+                : 'En revisión'}
+          </h2>
+          <p
+            className="mt-3 text-[var(--fg-muted)] text-sm"
+            data-testid="decision-confidence-meta"
+          >
+            Confianza{' '}
+            <span data-testid="decision-confidence">
+              {(decision.confidence * 100).toFixed(1)}%
+            </span>{' '}
+            ·{' '}
+            <span data-testid="decision-cited-rules-count">
+              {decision.citedRules.length}
+            </span>{' '}
+            {decision.citedRules.length === 1 ? 'regla citada' : 'reglas citadas'}
+          </p>
+          <p
+            className="mt-4 text-[var(--fg)] serif-italic"
+            data-testid="decision-reason-banner"
+          >
+            {decision.reason}
+          </p>
+          {decision.citedRules.length > 0 && (
+            <div
+              className="mt-4 flex flex-wrap gap-2"
+              data-testid="decision-cited-rules-banner"
+            >
+              {decision.citedRules.map((ruleId) => (
+                <a
+                  key={ruleId}
+                  href={`#policy-rule-${ruleId}`}
+                  data-testid={`decision-rule-link-${ruleId}`}
+                  className="font-mono text-[11px] uppercase tracking-[0.08em] bg-[var(--accent-wash)] text-[var(--accent)] px-2 py-1 rounded-[2px] hover:underline"
+                >
+                  {ruleId}
+                </a>
+              ))}
+            </div>
+          )}
         </aside>
       )}
 
@@ -477,7 +636,11 @@ export default async function ApplicationPage({ params }: PageProps) {
                     {policy.applies.map((ruleId) => {
                       const chunk = policyChunksByRuleId.get(ruleId);
                       return (
-                        <div key={ruleId} data-testid={`policy-rule-detail-${ruleId}`}>
+                        <div
+                          key={ruleId}
+                          id={`policy-rule-${ruleId}`}
+                          data-testid={`policy-rule-detail-${ruleId}`}
+                        >
                           {chunk ? (
                             <pre className="whitespace-pre-wrap font-sans text-sm text-[var(--fg)]">
                               {chunk.fullText}
@@ -505,7 +668,230 @@ export default async function ApplicationPage({ params }: PageProps) {
             </p>
           )}
         </article>
+
+        <hr className="hairline" />
+
+        <article data-testid="state-v6">
+          <div className="entry-meta mb-4">
+            <span className="cat">v6</span>
+            <span>·</span>
+            <span>DECISION</span>
+            {decisionRow && (
+              <>
+                <span>·</span>
+                <span>{new Date(decisionRow.createdAt).toISOString()}</span>
+              </>
+            )}
+          </div>
+          <h3 className="mb-4" data-testid="decision-heading">
+            Veredicto y trazabilidad
+          </h3>
+          {decision ? (
+            <div className="space-y-8 text-[var(--fg)]">
+              {decision.degraded && (
+                <div
+                  data-testid="decision-degraded-disclaimer"
+                  className="border-l-2 border-[#C67E2F] bg-[#F5EFE0] px-4 py-3 text-sm text-[var(--fg-muted)]"
+                >
+                  Esta decisión se calculó en modo degradado. Razón:{' '}
+                  <span data-testid="decision-degraded-reason">
+                    {decision.modelRequested && decision.modelActual
+                      ? `${decision.modelRequested} → ${decision.modelActual}`
+                      : 'fallback a razonamiento canned'}
+                  </span>
+                  . El razonamiento textual puede tener menos calidad narrativa;
+                  los números deterministas se preservan.
+                </div>
+              )}
+
+              <div>
+                <dt className="text-[var(--fg-muted)] mb-2">Veredicto</dt>
+                <dd className="text-[var(--fg)]" data-testid="decision-summary">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[var(--fg-muted)]">
+                    {decision.decisionType === 'hard_reject'
+                      ? 'hard_reject (deterministic)'
+                      : 'llm_decision'}
+                  </span>{' '}
+                  · confidence{' '}
+                  <span data-testid="decision-confidence-detailed">
+                    {(decision.confidence * 100).toFixed(1)}%
+                  </span>
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-[var(--fg-muted)] mb-2">
+                  Razonamiento del modelo
+                </dt>
+                <dd
+                  className="serif-italic text-[var(--fg-muted)]"
+                  data-testid="decision-reason-detailed"
+                >
+                  {decision.reason}
+                </dd>
+              </div>
+
+              {decision.decisionType === 'hard_reject' &&
+                decision.triggeredBy && (
+                  <div>
+                    <dt className="text-[var(--fg-muted)] mb-2">
+                      Audit trail del rechazo
+                    </dt>
+                    <dl
+                      className="grid grid-cols-[max-content_1fr] gap-y-2 gap-x-4 text-sm"
+                      data-testid="decision-triggered-by"
+                    >
+                      <dt className="text-[var(--fg-muted)]">Regla disparada</dt>
+                      <dd className="font-mono">
+                        {decision.citedRules[0] ?? 'EXC-???'}
+                      </dd>
+                      <dt className="text-[var(--fg-muted)]">Campo</dt>
+                      <dd className="font-mono">{decision.triggeredBy.field}</dd>
+                      <dt className="text-[var(--fg-muted)]">Fuente</dt>
+                      <dd className="font-mono">
+                        {decision.triggeredBy.source}
+                      </dd>
+                      <dt className="text-[var(--fg-muted)]">Valor crudo</dt>
+                      <dd className="font-mono">
+                        {String(decision.triggeredBy.value)}
+                      </dd>
+                      {decision.triggeredBy.computed && (
+                        <>
+                          <dt className="text-[var(--fg-muted)]">
+                            Cálculo derivado
+                          </dt>
+                          <dd className="font-mono text-xs">
+                            {JSON.stringify(decision.triggeredBy.computed)}
+                          </dd>
+                        </>
+                      )}
+                      <dt className="text-[var(--fg-muted)]">LLM consultado</dt>
+                      <dd>NO (bypass por hard reject)</dd>
+                    </dl>
+                  </div>
+                )}
+
+              {decision.decisionType === 'llm_decision' && decision.breakdown && (
+                <div>
+                  <dt className="text-[var(--fg-muted)] mb-2">
+                    Cómo se calculó la confianza
+                  </dt>
+                  <table
+                    className="w-full text-sm"
+                    data-testid="decision-breakdown-table"
+                  >
+                    <thead>
+                      <tr className="text-left text-[var(--fg-muted)] border-b border-[var(--rule)]">
+                        <th className="py-2 font-normal">Señal</th>
+                        <th className="py-2 font-normal">Valor</th>
+                        <th className="py-2 font-normal text-right">Aporta</th>
+                      </tr>
+                    </thead>
+                    <tbody className="font-mono text-[13px]">
+                      {decision.breakdown.map((row) => (
+                        <tr
+                          key={row.signal}
+                          className="border-b border-[var(--rule-soft)]"
+                          data-testid={`breakdown-row-${row.signal}`}
+                        >
+                          <td className="py-2">
+                            {humanizeSignal(row.signal)}
+                          </td>
+                          <td className="py-2">
+                            {humanizeRawValue(row.signal, row.rawValue)}
+                          </td>
+                          <td className="py-2 text-right">
+                            {(row.weighted * 100).toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="font-bold">
+                        <td className="py-2">Confianza total</td>
+                        <td></td>
+                        <td className="py-2 text-right">
+                          {(decision.confidence * 100).toFixed(1)}%
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p className="text-[var(--fg-muted)] text-xs mt-2">
+                    Umbral aprobación: 70.0% · margen{' '}
+                    {decision.confidence >= 0.7 ? '+' : ''}
+                    {((decision.confidence - 0.7) * 100).toFixed(1)} pts
+                  </p>
+                </div>
+              )}
+
+              <details
+                className="mt-2"
+                data-testid="decision-telemetry-details"
+              >
+                <summary className="cursor-pointer text-[var(--fg-muted)] text-sm hover:text-[var(--accent)]">
+                  Ver detalle telemétrico
+                </summary>
+                <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-y-1 gap-x-4 text-xs font-mono text-[var(--fg-muted)]">
+                  {decision.modelRequested && (
+                    <>
+                      <dt>modelo solicitado</dt>
+                      <dd>{decision.modelRequested}</dd>
+                    </>
+                  )}
+                  {decision.modelActual && (
+                    <>
+                      <dt>modelo usado</dt>
+                      <dd>{decision.modelActual}</dd>
+                    </>
+                  )}
+                  <dt>llm bypassed</dt>
+                  <dd>{decision.llmBypassed ? 'sí' : 'no'}</dd>
+                  <dt>degraded</dt>
+                  <dd>{decision.degraded ? 'sí' : 'no'}</dd>
+                </dl>
+              </details>
+            </div>
+          ) : (
+            <p
+              className="text-[var(--fg-muted)]"
+              data-testid="decision-pending"
+            >
+              Pendiente. La decisión sugerida no se completó para esta
+              solicitud.
+            </p>
+          )}
+        </article>
       </section>
     </main>
   );
+}
+
+function humanizeSignal(signal: string): string {
+  const map: Record<string, string> = {
+    bureau_score: 'Bureau score',
+    alt_score: 'Score alternativo',
+    iess_affiliation: 'Afiliación IESS',
+    iess_tenure: 'Antigüedad laboral',
+    hard_inquiries: 'Consultas recientes',
+    age_band: 'Edad',
+  };
+  return map[signal] ?? signal;
+}
+
+function humanizeRawValue(signal: string, value: number | null): string {
+  if (value === null) return 'no disponible';
+  switch (signal) {
+    case 'bureau_score':
+      return `${value} (${value >= 720 ? 'muy bueno' : value >= 600 ? 'bueno' : 'bajo'})`;
+    case 'alt_score':
+      return `${value}/100`;
+    case 'iess_affiliation':
+      return value === 1 ? 'Sí (formal)' : 'No (autónomo)';
+    case 'iess_tenure':
+      return `${(value / 12).toFixed(1)} años`;
+    case 'hard_inquiries':
+      return `${value}`;
+    case 'age_band':
+      return `${value} años`;
+    default:
+      return `${value}`;
+  }
 }

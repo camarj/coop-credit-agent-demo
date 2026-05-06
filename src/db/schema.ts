@@ -86,6 +86,34 @@ export const ragChunks = pgTable(
   ],
 );
 
+/**
+ * `application_token_usage` is the per-agent record of LLM tokens consumed
+ * for a given application. One row per agent that called the LLM (today:
+ * policyAgent + decisionAgent). Append-only by convention; no immutability
+ * trigger because we may re-run an application during dev (tests TRUNCATE).
+ *
+ * Slice 7: counting + persistence only. NO enforcement against threshold.
+ * Slice 9 reads this table to calibrate the operational threshold for
+ * `TOKEN_BUDGET_PER_APPLICATION` (CONTEXT.md term, currently unimplemented).
+ * See ADR-0008 section 9.
+ */
+export const applicationTokenUsage = pgTable(
+  'application_token_usage',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => applications.id),
+    agentName: text('agent_name').notNull(),
+    inputTokens: integer('input_tokens').notNull(),
+    outputTokens: integer('output_tokens').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+);
+
 export type Application = typeof applications.$inferSelect;
 export type ApplicationState = typeof applicationStates.$inferSelect;
 export type RagChunk = typeof ragChunks.$inferSelect;
+export type ApplicationTokenUsage = typeof applicationTokenUsage.$inferSelect;
