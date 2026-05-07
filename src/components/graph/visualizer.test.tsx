@@ -77,6 +77,99 @@ describe('<GraphVisualizer> — state → visual mapping (ADR-0009 table)', () =
   });
 });
 
+describe('<GraphVisualizer> — FAILED and COMPENSATED states', () => {
+  it('renders FAILED with the danger red stroke (#B64545)', () => {
+    const state = play([
+      { kind: 'span.start', version: 1, spanId: 'sp_1', agent: 'bureau', at: T },
+      { kind: 'span.failed', version: 1, spanId: 'sp_1', agent: 'bureau', reason: 'boom', at: T },
+    ]);
+    const html = renderGraph(state);
+    expect(html).toMatch(/data-agent="bureau"[^>]*stroke="#B64545"/);
+  });
+
+  it('renders COMPENSATED with the warm warning stroke (#C67E2F) and dashed pattern', () => {
+    const state = play([
+      { kind: 'span.start', version: 1, spanId: 'sp_1', agent: 'bureau', at: T },
+      { kind: 'span.complete', version: 1, spanId: 'sp_1', agent: 'bureau', at: T },
+      {
+        kind: 'span.compensated',
+        version: 1,
+        spanId: 'sp_2',
+        agent: 'bureau',
+        compensatedAt: T,
+        reason: 'walk-back',
+      },
+    ]);
+    const html = renderGraph(state);
+    expect(html).toMatch(/data-agent="bureau"[^>]*stroke="#C67E2F"/);
+    expect(html).toMatch(/data-agent="bureau"[^>]*stroke-dasharray=/);
+  });
+});
+
+describe('<GraphVisualizer> — accessibility', () => {
+  it('marks every node group as a focusable button with role and tabIndex', () => {
+    const html = renderGraph();
+    for (const _agent of PIPELINE_NODES) {
+      // count is what matters — at least one tabindex/role per agent
+    }
+    const tabindexes = html.match(/tabIndex="0"|tabindex="0"/g) ?? [];
+    const roles = html.match(/role="button"/g) ?? [];
+    expect(tabindexes.length).toBeGreaterThanOrEqual(PIPELINE_NODES.length);
+    expect(roles.length).toBeGreaterThanOrEqual(PIPELINE_NODES.length);
+  });
+
+  it('exposes a Spanish aria-label that reflects the agent and current state', () => {
+    const state = play([
+      { kind: 'span.start', version: 1, spanId: 'sp_1', agent: 'identity', at: T },
+    ]);
+    const html = renderGraph(state);
+    expect(html).toMatch(/aria-label="Agente Identidad — ejecutando"/);
+  });
+
+  it('uses the right Spanish state label for each NodeState', () => {
+    const allStates: Array<[string, string]> = [
+      ['PENDING', 'pendiente'],
+      ['RUNNING', 'ejecutando'],
+      ['COMPLETE', 'completado'],
+      ['FAILED', 'fallado'],
+      ['COMPENSATED', 'compensado'],
+    ];
+    for (const [stateName, expected] of allStates) {
+      const events: StreamEvent[] = [
+        { kind: 'span.start', version: 1, spanId: 'sp_1', agent: 'bureau', at: T },
+      ];
+      if (stateName === 'COMPLETE' || stateName === 'COMPENSATED') {
+        events.push({ kind: 'span.complete', version: 1, spanId: 'sp_1', agent: 'bureau', at: T });
+      }
+      if (stateName === 'COMPENSATED') {
+        events.push({
+          kind: 'span.compensated',
+          version: 1,
+          spanId: 'sp_2',
+          agent: 'bureau',
+          compensatedAt: T,
+          reason: 'walk-back',
+        });
+      }
+      if (stateName === 'FAILED') {
+        events.push({ kind: 'span.failed', version: 1, spanId: 'sp_1', agent: 'bureau', reason: 'x', at: T });
+      }
+      if (stateName === 'PENDING') {
+        events.length = 0;
+      }
+      const state = events.reduce(reduce, initialGraphState());
+      const html = renderGraph(state);
+      expect(html, `state=${stateName}`).toContain(`Agente Buró — ${expected}`);
+    }
+  });
+
+  it('renders a focus ring element so focus-visible CSS can target it without overriding the state stroke', () => {
+    const html = renderGraph();
+    const rings = html.match(/data-graph-focus-ring/g) ?? [];
+    expect(rings).toHaveLength(PIPELINE_NODES.length);
+  });
+});
+
 describe('<GraphVisualizer> — fan-out layout', () => {
   it('renders bureau and alt_score with different y coordinates (parallel branch)', () => {
     const html = renderGraph();

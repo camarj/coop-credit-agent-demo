@@ -1,5 +1,14 @@
 import { PIPELINE_NODES, type AgentName } from '@/lib/orchestrator/pipeline';
 import type { GraphState, NodeState } from '@/lib/streaming/graph-reducer';
+import './visualizer.css';
+
+const STATE_LABELS: Record<NodeState, string> = {
+  PENDING: 'pendiente',
+  RUNNING: 'ejecutando',
+  COMPLETE: 'completado',
+  FAILED: 'fallado',
+  COMPENSATED: 'compensado',
+};
 
 const VIEWBOX_WIDTH = 800;
 const VIEWBOX_HEIGHT = 280;
@@ -95,7 +104,23 @@ export function GraphVisualizer({ state }: Props) {
           const pos = NODE_POSITIONS[agent];
           const style = STATE_STYLES[node.state];
           return (
-            <g key={agent} data-agent={agent} data-state={node.state}>
+            <g
+              key={agent}
+              data-agent={agent}
+              data-state={node.state}
+              tabIndex={0}
+              role="button"
+              aria-label={`Agente ${NODE_LABELS[agent]} — ${STATE_LABELS[node.state]}`}
+            >
+              <circle
+                data-graph-focus-ring
+                cx={pos.x}
+                cy={pos.y}
+                r={NODE_RADIUS + 4}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={2}
+              />
               <circle
                 data-agent={agent}
                 cx={pos.x}

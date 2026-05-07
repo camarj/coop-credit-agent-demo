@@ -1,0 +1,81 @@
+/*
+ * GraphVisualizer animations + a11y focus ring.
+ *
+ * State→animation table per ADR-0009 §"Coherencia eventos→reducer→render".
+ * Animations are scoped via [data-agent] selectors on the inner state circle
+ * so the focus ring (data-graph-focus-ring) stays untouched.
+ *
+ * prefers-reduced-motion is honored from day 1 (ADR-0009 §4) — no animations
+ * applied when the user requests reduced motion.
+ */
+
+@keyframes coop-graph-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes coop-graph-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+@keyframes coop-graph-undo {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-12deg); }
+}
+
+@keyframes coop-graph-fade-in {
+  0% { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+
+[data-state="RUNNING"] > circle[data-agent] {
+  animation: coop-graph-pulse 1.6s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-state="COMPLETE"] > circle[data-agent] {
+  animation: coop-graph-fade-in 320ms ease-out;
+}
+
+[data-state="FAILED"] > circle[data-agent] {
+  animation: coop-graph-shake 200ms ease-in-out;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-state="COMPENSATED"] > circle[data-agent] {
+  animation: coop-graph-undo 400ms ease-out forwards;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-graph-focus-ring] {
+  pointer-events: none;
+  transition: stroke 160ms var(--ease-smooth, ease-out);
+}
+
+g[data-agent]:focus {
+  outline: none;
+}
+
+g[data-agent]:focus-visible > [data-graph-focus-ring] {
+  stroke: var(--accent);
+}
+
+g[data-agent] {
+  cursor: pointer;
+  transition: opacity 160ms var(--ease-smooth, ease-out);
+}
+
+g[data-agent]:hover > circle[data-agent] {
+  opacity: 0.92;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-state] > circle[data-agent] {
+    animation: none !important;
+  }
+}
