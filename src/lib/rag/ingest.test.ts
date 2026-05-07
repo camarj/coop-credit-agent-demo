@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { db } from '@/db/client';
 import { ragChunks } from '@/db/schema';
-import { closeDb, resetRagChunks } from '@/db/test-helpers';
+import { closeDb, resetRagChunks, repopulateRagCorpus } from '@/db/test-helpers';
 import { ingestCorpus } from './ingest';
 import type { EmbedClient } from './embed-client';
 
@@ -35,7 +35,12 @@ beforeEach(async () => {
   await resetRagChunks();
 });
 
-afterAll(closeDb);
+afterAll(async () => {
+  // Restore the production policy corpus so a subsequent `pnpm dev` run
+  // does not start with an empty rag_chunks table (tests share the dev DB).
+  await repopulateRagCorpus();
+  await closeDb();
+});
 
 describe('ingestCorpus — happy path', () => {
   it('parses corpus, embeds each chunk, and inserts with rule metadata', async () => {

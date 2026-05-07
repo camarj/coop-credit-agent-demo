@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { ragChunks } from '@/db/schema';
-import { closeDb, resetRagChunks } from '@/db/test-helpers';
+import { closeDb, resetRagChunks, repopulateRagCorpus } from '@/db/test-helpers';
 import { createRAGRetriever } from './retriever';
 import type { EmbedClient } from './embed-client';
 import type { RetrievedChunk } from './types';
@@ -58,7 +58,10 @@ beforeEach(async () => {
   await resetRagChunks();
 });
 
-afterAll(closeDb);
+afterAll(async () => {
+  await repopulateRagCorpus();
+  await closeDb();
+});
 
 describe('RAGRetriever — retrieve', () => {
   it('returns the top-K chunks ordered by cosine similarity descending', async () => {
