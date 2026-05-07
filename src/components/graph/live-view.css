@@ -18,6 +18,29 @@
   margin-bottom: 32px;
 }
 
+.live-view__meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.live-view__new-link {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  transition: background-size 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.live-view__new-link:hover {
+  background-size: 100% 1px;
+}
+
 .live-view__title {
   font-family: var(--font-serif);
   font-size: clamp(36px, 5vw, 60px);

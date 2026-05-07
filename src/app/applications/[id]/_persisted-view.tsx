@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { InferSelectModel } from 'drizzle-orm';
@@ -164,6 +165,13 @@ export async function PersistedView({ applicationId: id, states }: PersistedView
           <span>·</span>
           <span data-testid="latest-version">v{latestVersion ?? '?'}</span>
         </div>
+        <Link
+          href="/"
+          className="dashboard__new-link"
+          data-testid="new-application-link"
+        >
+          Nueva solicitud →
+        </Link>
       </header>
 
       {saga && (

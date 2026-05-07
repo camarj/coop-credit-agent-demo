@@ -18,13 +18,31 @@
 
 .dashboard__header {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--fg-subtle);
+}
+
+.dashboard__new-link {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent);
+  text-decoration: none;
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  transition: background-size 240ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dashboard__new-link:hover {
+  background-size: 100% 1px;
 }
 
 .dashboard__header .entry-meta {

@@ -1,6 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useGraphStream } from './use-graph-stream';
 import { GraphVisualizer } from './visualizer';
 import { ReasoningStream } from './reasoning-stream';
@@ -69,12 +70,21 @@ export function LiveView({ applicationId }: Props) {
       data-current-agent={currentAgent ?? undefined}
     >
       <header className="live-view__header">
-        <div className="entry-meta">
-          <span className="cat">ANALIZANDO SOLICITUD</span>
-          <span>·</span>
-          <span data-testid="application-id-short">
-            {applicationId.slice(0, 8)}
-          </span>
+        <div className="live-view__meta-row">
+          <div className="entry-meta">
+            <span className="cat">ANALIZANDO SOLICITUD</span>
+            <span>·</span>
+            <span data-testid="application-id-short">
+              {applicationId.slice(0, 8)}
+            </span>
+          </div>
+          <Link
+            href="/"
+            className="live-view__new-link"
+            data-testid="new-application-link"
+          >
+            Nueva solicitud →
+          </Link>
         </div>
         <h1 className="live-view__title" data-testid="live-view-heading">
           {heading}
