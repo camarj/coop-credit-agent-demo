@@ -1,6 +1,15 @@
 import { PIPELINE_NODES, type AgentName } from '@/lib/orchestrator/pipeline';
 import type { StreamEvent } from '@/lib/streaming/event-schema';
 
+const LOGGABLE_KINDS = new Set([
+  'span.start',
+  'span.complete',
+  'span.failed',
+  'span.compensated',
+  'span.event',
+  'span.attribute',
+]);
+
 export type NodeState = 'PENDING' | 'RUNNING' | 'COMPLETE' | 'FAILED' | 'COMPENSATED';
 
 export type GraphNode = {
@@ -12,10 +21,27 @@ export type GraphNode = {
 
 export type GraphStatus = 'streaming' | 'complete' | 'failed';
 
+/**
+ * Append-only log of every span lifecycle / content event the reducer has
+ * seen, in arrival order. Drives the <ReasoningStream> "watch the agent
+ * think" feed under the graph. Top-level orchestrator events (complete,
+ * failed, already_complete) are NOT added — they flip status, not narrative.
+ */
+export type LogEntry = Extract<
+  StreamEvent,
+  | { kind: 'span.start' }
+  | { kind: 'span.complete' }
+  | { kind: 'span.failed' }
+  | { kind: 'span.compensated' }
+  | { kind: 'span.event' }
+  | { kind: 'span.attribute' }
+>;
+
 export type GraphState = {
   status: GraphStatus;
   failureReason?: string;
   nodes: Record<AgentName, GraphNode>;
+  log: LogEntry[];
 };
 
 function emptyNode(): GraphNode {
@@ -27,7 +53,7 @@ export function initialGraphState(): GraphState {
   for (const name of PIPELINE_NODES) {
     nodes[name] = emptyNode();
   }
-  return { status: 'streaming', nodes };
+  return { status: 'streaming', nodes, log: [] };
 }
 
 function setNode(state: GraphState, agent: AgentName, patch: Partial<GraphNode>): GraphState {
@@ -40,7 +66,13 @@ function setNode(state: GraphState, agent: AgentName, patch: Partial<GraphNode>)
   };
 }
 
+function appendLog(prev: GraphState, event: StreamEvent): GraphState {
+  if (!LOGGABLE_KINDS.has(event.kind)) return prev;
+  return { ...prev, log: [...prev.log, event as LogEntry] };
+}
+
 export function reduce(prev: GraphState, event: StreamEvent): GraphState {
+  prev = appendLog(prev, event);
   switch (event.kind) {
     case 'span.start':
       return setNode(prev, event.agent, {

@@ -159,6 +159,48 @@ describe('reduce — orchestrator-level events', () => {
   });
 });
 
+describe('reduce — log feed (drives ReasoningStream)', () => {
+  it('starts with an empty log', () => {
+    expect(initialGraphState().log).toEqual([]);
+  });
+
+  it('appends every loggable event in arrival order', () => {
+    const events: StreamEvent[] = [
+      start('identity'),
+      {
+        kind: 'span.event',
+        version: 1,
+        spanId: 'sp_1',
+        agent: 'identity',
+        name: 'check.completed',
+        attrs: { ok: true },
+        at: T,
+      },
+      complete('identity'),
+      start('income', 'sp_2'),
+    ];
+    const s = play(events);
+    expect(s.log).toHaveLength(4);
+    expect(s.log.map((e) => e.kind)).toEqual([
+      'span.start',
+      'span.event',
+      'span.complete',
+      'span.start',
+    ]);
+  });
+
+  it('does NOT log orchestrator-level events (status changes are not narrative)', () => {
+    const events: StreamEvent[] = [
+      start('identity'),
+      complete('identity'),
+      { kind: 'orchestrator.complete', version: 1, at: T },
+    ];
+    const s = play(events);
+    expect(s.log).toHaveLength(2);
+    expect(s.log.map((e) => e.kind)).toEqual(['span.start', 'span.complete']);
+  });
+});
+
 describe('reduce — purity', () => {
   it('does not mutate the previous state', () => {
     const prev = initialGraphState();

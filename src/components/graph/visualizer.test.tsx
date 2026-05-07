@@ -170,6 +170,24 @@ describe('<GraphVisualizer> — accessibility', () => {
   });
 });
 
+describe('<GraphVisualizer> — RUNNING ring animation hooks', () => {
+  it('renders two expanding rings ONLY on RUNNING nodes', () => {
+    const state = play([
+      { kind: 'span.start', version: 1, spanId: 'sp_1', agent: 'policy', at: T },
+    ]);
+    const html = renderGraph(state);
+    const outer = html.match(/data-graph-running-ring="outer"/g) ?? [];
+    const inner = html.match(/data-graph-running-ring="inner"/g) ?? [];
+    expect(outer).toHaveLength(1);
+    expect(inner).toHaveLength(1);
+  });
+
+  it('renders no expanding rings when no node is RUNNING', () => {
+    const html = renderGraph(initialGraphState());
+    expect(html).not.toContain('data-graph-running-ring');
+  });
+});
+
 describe('<GraphVisualizer> — selection visual', () => {
   it('renders a teal selection ring on the selected agent only', () => {
     const html = renderToStaticMarkup(
@@ -189,14 +207,21 @@ describe('<GraphVisualizer> — selection visual', () => {
   });
 });
 
-describe('<GraphVisualizer> — fan-out layout', () => {
-  it('renders bureau and alt_score with different y coordinates (parallel branch)', () => {
+describe('<GraphVisualizer> — fan-out layout (vertical)', () => {
+  it('renders bureau and alt_score with different x coordinates (parallel branch splits horizontally)', () => {
     const html = renderGraph();
-    const bureau = html.match(/data-agent="bureau"[^>]*cy="(\d+(?:\.\d+)?)"/);
-    const altScore = html.match(/data-agent="alt_score"[^>]*cy="(\d+(?:\.\d+)?)"/);
+    const bureau = html.match(/data-agent="bureau"[^>]*cx="(\d+(?:\.\d+)?)"/);
+    const altScore = html.match(/data-agent="alt_score"[^>]*cx="(\d+(?:\.\d+)?)"/);
     expect(bureau).toBeTruthy();
     expect(altScore).toBeTruthy();
     expect(bureau![1]).not.toBe(altScore![1]);
+  });
+
+  it('lays out the pipeline top → bottom (identity above decision)', () => {
+    const html = renderGraph();
+    const identity = html.match(/data-agent="identity"[^>]*cy="(\d+(?:\.\d+)?)"/);
+    const decision = html.match(/data-agent="decision"[^>]*cy="(\d+(?:\.\d+)?)"/);
+    expect(parseFloat(identity![1])).toBeLessThan(parseFloat(decision![1]));
   });
 
   it('renders edges between sequential agents', () => {

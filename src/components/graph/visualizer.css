@@ -1,17 +1,36 @@
 /*
  * GraphVisualizer animations + a11y focus ring.
  *
- * State→animation table per ADR-0009 §"Coherencia eventos→reducer→render".
- * Animations are scoped via [data-agent] selectors on the inner state circle
- * so the focus ring (data-graph-focus-ring) stays untouched.
+ * RUNNING animation is the centerpiece — visible from a webinar audience:
+ *   1. The state circle pulses in scale + drop-shadow glow (teal).
+ *   2. Two concentric outer rings expand from the node radius outward and
+ *      fade out, staggered 800ms apart, infinite loop.
  *
- * prefers-reduced-motion is honored from day 1 (ADR-0009 §4) — no animations
- * applied when the user requests reduced motion.
+ * prefers-reduced-motion disables every animation per ADR-0009 §4.
  */
 
-@keyframes coop-graph-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+@keyframes coop-graph-pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 14px var(--accent));
+  }
+}
+
+@keyframes coop-graph-ring-expand {
+  0% {
+    r: 26;
+    opacity: 0.7;
+    stroke-width: 2;
+  }
+  100% {
+    r: 50;
+    opacity: 0;
+    stroke-width: 0.5;
+  }
 }
 
 @keyframes coop-graph-shake {
@@ -31,9 +50,18 @@
 }
 
 [data-state="RUNNING"] > circle[data-agent] {
-  animation: coop-graph-pulse 1.6s ease-in-out infinite;
+  animation: coop-graph-pulse-glow 1.6s ease-in-out infinite;
   transform-origin: center;
   transform-box: fill-box;
+}
+
+[data-graph-running-ring="outer"] {
+  animation: coop-graph-ring-expand 1.6s ease-out infinite;
+}
+
+[data-graph-running-ring="inner"] {
+  animation: coop-graph-ring-expand 1.6s ease-out infinite;
+  animation-delay: 0.8s;
 }
 
 [data-state="COMPLETE"] > circle[data-agent] {
@@ -75,7 +103,11 @@ g[data-agent]:hover > circle[data-agent] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-state] > circle[data-agent] {
+  [data-state] > circle[data-agent],
+  [data-graph-running-ring] {
     animation: none !important;
+  }
+  [data-graph-running-ring] {
+    opacity: 0;
   }
 }

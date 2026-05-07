@@ -3,18 +3,20 @@ import type { GraphState, NodeState } from '@/lib/streaming/graph-reducer';
 import { NODE_LABELS, STATE_LABELS } from './labels';
 import './visualizer.css';
 
-const VIEWBOX_WIDTH = 800;
-const VIEWBOX_HEIGHT = 280;
+// Vertical layout: top → bottom, parallel branch (bureau/alt_score) splits
+// horizontally. Mobile-first — viewBox aspect ratio fits a 320×640 column.
+const VIEWBOX_WIDTH = 320;
+const VIEWBOX_HEIGHT = 720;
 
 type Pos = { x: number; y: number };
 
 const NODE_POSITIONS: Record<AgentName, Pos> = {
-  identity: { x: 80, y: 140 },
-  income: { x: 220, y: 140 },
-  bureau: { x: 380, y: 80 },
-  alt_score: { x: 380, y: 200 },
-  policy: { x: 540, y: 140 },
-  decision: { x: 700, y: 140 },
+  identity: { x: 160, y: 80 },
+  income: { x: 160, y: 200 },
+  bureau: { x: 90, y: 340 },
+  alt_score: { x: 230, y: 340 },
+  policy: { x: 160, y: 480 },
+  decision: { x: 160, y: 620 },
 };
 
 const EDGES: Array<[AgentName, AgentName]> = [
@@ -49,11 +51,14 @@ const STATE_STYLES: Record<NodeState, StateStyle> = {
 };
 
 function edgePath(from: Pos, to: Pos): string {
-  if (from.y === to.y) {
-    return `M ${from.x + NODE_RADIUS} ${from.y} L ${to.x - NODE_RADIUS} ${to.y}`;
+  // Vertical layout: edges flow top → bottom. When endpoints share x, draw
+  // a straight vertical line. When they diverge (parallel branch), use a
+  // Bezier that curves in x at the midpoint y.
+  if (from.x === to.x) {
+    return `M ${from.x} ${from.y + NODE_RADIUS} L ${to.x} ${to.y - NODE_RADIUS}`;
   }
-  const midX = (from.x + to.x) / 2;
-  return `M ${from.x + NODE_RADIUS} ${from.y} C ${midX} ${from.y}, ${midX} ${to.y}, ${to.x - NODE_RADIUS} ${to.y}`;
+  const midY = (from.y + to.y) / 2;
+  return `M ${from.x} ${from.y + NODE_RADIUS} C ${from.x} ${midY}, ${to.x} ${midY}, ${to.x} ${to.y - NODE_RADIUS}`;
 }
 
 interface Props {
@@ -123,12 +128,34 @@ export function GraphVisualizer({ state, selectedAgent = null, onSelectAgent }: 
                 stroke="transparent"
                 strokeWidth={2}
               />
+              {node.state === 'RUNNING' && (
+                <>
+                  <circle
+                    data-graph-running-ring="outer"
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={NODE_RADIUS}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth={2}
+                  />
+                  <circle
+                    data-graph-running-ring="inner"
+                    cx={pos.x}
+                    cy={pos.y}
+                    r={NODE_RADIUS}
+                    fill="none"
+                    stroke="var(--accent)"
+                    strokeWidth={2}
+                  />
+                </>
+              )}
               {isSelected && (
                 <circle
                   data-graph-selection-ring="true"
                   cx={pos.x}
                   cy={pos.y}
-                  r={NODE_RADIUS + 6}
+                  r={NODE_RADIUS + 8}
                   fill="none"
                   stroke="var(--accent)"
                   strokeWidth={2}
@@ -145,12 +172,13 @@ export function GraphVisualizer({ state, selectedAgent = null, onSelectAgent }: 
                 strokeDasharray={style.strokeDasharray}
               />
               <text
-                x={pos.x}
-                y={pos.y + NODE_RADIUS + 18}
-                textAnchor="middle"
+                x={agent === 'bureau' ? pos.x - NODE_RADIUS - 12 : pos.x + NODE_RADIUS + 12}
+                y={pos.y + 4}
+                textAnchor={agent === 'bureau' ? 'end' : 'start'}
                 fontFamily="var(--font-sans)"
-                fontSize={13}
-                fill="var(--fg-muted)"
+                fontSize={14}
+                fontWeight={500}
+                fill="var(--fg)"
               >
                 {NODE_LABELS[agent]}
               </text>

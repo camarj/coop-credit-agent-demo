@@ -1,13 +1,34 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGraphStream } from './use-graph-stream';
 import { GraphVisualizer } from './visualizer';
-import { ReasoningPanel } from './reasoning-panel';
-import type { AgentName } from '@/lib/orchestrator/pipeline';
+import { ReasoningStream } from './reasoning-stream';
+import { PIPELINE_NODES, type AgentName } from '@/lib/orchestrator/pipeline';
+import { NODE_LABELS } from './labels';
+import type { GraphState } from '@/lib/streaming/graph-reducer';
 import './live-view.css';
 
 const COMPLETION_DWELL_MS = 700;
+
+const LEAD_COPY: Record<AgentName | 'idle' | 'complete' | 'failed', string> = {
+  identity: 'Verificando identidad contra el Registro Civil',
+  income: 'Consultando afiliación IESS y calculando relación deuda/ingreso',
+  bureau: 'Solicitando reporte crediticio en Equifax',
+  alt_score: 'Construyendo score alternativo desde señales no-tradicionales',
+  policy: 'Aplicando reglas de la política de la cooperativa',
+  decision: 'Razonando la decisión final con explicabilidad',
+  idle: 'Conectando con el orquestador',
+  complete: 'Decisión lista — preparando reporte',
+  failed: 'La solicitud no pudo completarse',
+};
+
+function findCurrentAgent(state: GraphState): AgentName | null {
+  for (const agent of PIPELINE_NODES) {
+    if (state.nodes[agent].state === 'RUNNING') return agent;
+  }
+  return null;
+}
 
 interface Props {
   applicationId: string;
@@ -15,17 +36,15 @@ interface Props {
 
 export function LiveView({ applicationId }: Props) {
   const { state, status } = useGraphStream(applicationId);
-  const [selectedAgent, setSelectedAgent] = useState<AgentName | null>(null);
   const router = useRouter();
+  const currentAgent = findCurrentAgent(state);
 
-  useEffect(() => {
-    if (!selectedAgent) return;
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSelectedAgent(null);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [selectedAgent]);
+  const leadKey: AgentName | 'idle' | 'complete' | 'failed' =
+    status === 'complete'
+      ? 'complete'
+      : status === 'failed'
+        ? 'failed'
+        : (currentAgent ?? 'idle');
 
   useEffect(() => {
     if (status !== 'complete' && status !== 'failed') return;
@@ -33,15 +52,48 @@ export function LiveView({ applicationId }: Props) {
     return () => clearTimeout(timer);
   }, [status, router]);
 
+  const heading =
+    currentAgent !== null
+      ? NODE_LABELS[currentAgent]
+      : status === 'complete'
+        ? 'Análisis completado'
+        : status === 'failed'
+          ? 'Análisis interrumpido'
+          : 'Procesando solicitud';
+
   return (
-    <div className="live-view" data-testid="live-view" data-status={status}>
-      <div className="live-view__graph">
-        <GraphVisualizer
-          state={state}
-          selectedAgent={selectedAgent}
-          onSelectAgent={setSelectedAgent}
-        />
+    <main
+      className="live-view"
+      data-testid="live-view"
+      data-status={status}
+      data-current-agent={currentAgent ?? undefined}
+    >
+      <header className="live-view__header">
+        <div className="entry-meta">
+          <span className="cat">ANALIZANDO SOLICITUD</span>
+          <span>·</span>
+          <span data-testid="application-id-short">
+            {applicationId.slice(0, 8)}
+          </span>
+        </div>
+        <h1 className="live-view__title" data-testid="live-view-heading">
+          {heading}
+        </h1>
+        <p className="lead" data-testid="live-view-lead">
+          {LEAD_COPY[leadKey]}
+        </p>
+        <hr className="hairline" />
+      </header>
+
+      <div className="live-view__body">
+        <div className="live-view__graph">
+          <GraphVisualizer state={state} />
+        </div>
+        <div className="live-view__feed">
+          <ReasoningStream state={state} />
+        </div>
       </div>
+
       {status === 'disconnected' && (
         <div
           className="live-view__error"
@@ -51,11 +103,6 @@ export function LiveView({ applicationId }: Props) {
           Conexión perdida — intentando reconectar.
         </div>
       )}
-      <ReasoningPanel
-        selectedAgent={selectedAgent}
-        state={state}
-        onClose={() => setSelectedAgent(null)}
-      />
-    </div>
+    </main>
   );
 }

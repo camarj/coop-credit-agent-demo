@@ -1,20 +1,82 @@
+/*
+ * LiveView — editorial header + responsive grid (graph + reasoning stream).
+ *
+ * Desktop ≥960px: graph left (~340px), feed right (1fr). Heading + lead
+ * span both columns.
+ *
+ * Mobile <960px: stack vertical — header, graph, feed.
+ */
+
 .live-view {
-  position: relative;
-  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 64px 24px 96px;
+  font-family: var(--font-sans);
+}
+
+.live-view__header {
+  margin-bottom: 32px;
+}
+
+.live-view__title {
+  font-family: var(--font-serif);
+  font-size: clamp(36px, 5vw, 60px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 12px 0 16px 0;
+  color: var(--fg);
+  transition: opacity 240ms ease-out;
+}
+
+.live-view__body {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 48px;
+  align-items: start;
 }
 
 .live-view__graph {
-  padding: 24px 0;
+  position: sticky;
+  top: 32px;
+}
+
+.live-view__graph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 360px;
+}
+
+.live-view__feed {
+  min-width: 0;
 }
 
 .live-view__error {
-  position: sticky;
-  top: 0;
+  margin-top: 24px;
+  padding: 12px 16px;
   background: #FAEBE7;
-  border-bottom: 1px solid var(--rule);
+  border: 1px solid #B64545;
+  border-radius: 6px;
   color: #8C2F2F;
-  font-family: var(--font-sans);
   font-size: 14px;
-  padding: 10px 24px;
-  z-index: 30;
+  font-family: var(--font-sans);
+}
+
+@media (max-width: 960px) {
+  .live-view {
+    padding: 40px 20px 64px;
+  }
+  .live-view__body {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .live-view__graph {
+    position: static;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .live-view__title {
+    font-size: clamp(32px, 6vw, 44px);
+  }
 }
