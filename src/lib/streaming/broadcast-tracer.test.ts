@@ -243,3 +243,57 @@ describe('BroadcastTracer — emit failures do not break spans', () => {
     expect(result).toBe('ok');
   });
 });
+
+describe('BroadcastTracer — saga walk-back via <agent>.compensate', () => {
+  it('emits a single span.compensated frame when a .compensate span succeeds', async () => {
+    const { events, emit } = makeRecorder();
+    const tracer = createBroadcastTracer(emit);
+
+    await tracer.span('bureau.compensate', { agent: 'bureau' }, async () => undefined);
+
+    expect(events).toHaveLength(1);
+    const frame = events[0];
+    if (frame.kind !== 'span.compensated') throw new Error('expected span.compensated');
+    expect(frame.agent).toBe('bureau');
+    expect(frame.spanId).toMatch(/^span_/);
+    expect(typeof frame.compensatedAt).toBe('number');
+    expect(typeof frame.reason).toBe('string');
+  });
+
+  it('does not emit span.start or span.complete during compensate', async () => {
+    const { events, emit } = makeRecorder();
+    const tracer = createBroadcastTracer(emit);
+
+    await tracer.span('bureau.compensate', {}, async () => undefined);
+
+    expect(events.find((e) => e.kind === 'span.start')).toBeUndefined();
+    expect(events.find((e) => e.kind === 'span.complete')).toBeUndefined();
+  });
+
+  it('does not emit any frame when compensate throws (orchestrator swallows it)', async () => {
+    const { events, emit } = makeRecorder();
+    const tracer = createBroadcastTracer(emit);
+
+    await expect(
+      tracer.span('bureau.compensate', {}, async () => {
+        throw new Error('compensation failed');
+      }),
+    ).rejects.toThrow('compensation failed');
+
+    expect(events).toHaveLength(0);
+  });
+
+  it('silences addEvent and setAttribute calls inside compensate body (no nodes[agent] noise)', async () => {
+    const { events, emit } = makeRecorder();
+    const tracer = createBroadcastTracer(emit);
+
+    await tracer.span('bureau.compensate', {}, async (span) => {
+      span.addEvent('hard_inquiry.removed');
+      span.setAttribute('removed_at', Date.now());
+    });
+
+    expect(events.filter((e) => e.kind === 'span.event')).toHaveLength(0);
+    expect(events.filter((e) => e.kind === 'span.attribute')).toHaveLength(0);
+    expect(events.filter((e) => e.kind === 'span.compensated')).toHaveLength(1);
+  });
+});

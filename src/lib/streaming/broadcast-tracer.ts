@@ -37,9 +37,15 @@ function redactAttrs(attrs: Record<string, unknown>): Record<string, unknown> {
   return redactDeep(attrs) as Record<string, unknown>;
 }
 
-function parseAgent(spanName: string): AgentName | null {
-  const head = spanName.split('.', 1)[0];
-  return PIPELINE_SET.has(head) ? (head as AgentName) : null;
+type SpanKind = 'execute' | 'compensate' | 'other';
+
+function parseSpan(spanName: string): { agent: AgentName; kind: SpanKind } | null {
+  const parts = spanName.split('.');
+  const head = parts[0];
+  if (!PIPELINE_SET.has(head)) return null;
+  const tail = parts[1];
+  const kind: SpanKind = tail === 'compensate' ? 'compensate' : tail === 'execute' ? 'execute' : 'other';
+  return { agent: head as AgentName, kind };
 }
 
 function safeEmit(emit: Emit, event: StreamEvent): void {
@@ -62,10 +68,28 @@ export function createBroadcastTracer(emit: Emit): Tracer {
       _initialAttrs: Record<string, unknown>,
       fn: (span: Span) => Promise<T>,
     ): Promise<T> {
-      const agent = parseAgent(name);
-      if (!agent) return fn(noopSpan);
+      const parsed = parseSpan(name);
+      if (!parsed) return fn(noopSpan);
+      const { agent, kind } = parsed;
 
       const spanId = `span_${randomUUID()}`;
+
+      if (kind === 'compensate') {
+        // Saga walk-back: emit nothing on entry, span.compensated on success
+        // (single frame), nothing on failure (orchestrator swallows compensate
+        // failures so they don't mask the original cause). addEvent/setAttribute
+        // are silenced — see ADR-0009 §3 (no nodes[agent] noise during walk-back).
+        const result = await fn(noopSpan);
+        safeEmit(emit, {
+          kind: 'span.compensated',
+          version: 1,
+          spanId,
+          agent,
+          compensatedAt: Date.now(),
+          reason: 'saga walk-back',
+        });
+        return result;
+      }
 
       safeEmit(emit, {
         kind: 'span.start',
