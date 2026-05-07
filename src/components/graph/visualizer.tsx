@@ -1,14 +1,7 @@
 import { PIPELINE_NODES, type AgentName } from '@/lib/orchestrator/pipeline';
 import type { GraphState, NodeState } from '@/lib/streaming/graph-reducer';
+import { NODE_LABELS, STATE_LABELS } from './labels';
 import './visualizer.css';
-
-const STATE_LABELS: Record<NodeState, string> = {
-  PENDING: 'pendiente',
-  RUNNING: 'ejecutando',
-  COMPLETE: 'completado',
-  FAILED: 'fallado',
-  COMPENSATED: 'compensado',
-};
 
 const VIEWBOX_WIDTH = 800;
 const VIEWBOX_HEIGHT = 280;
@@ -22,15 +15,6 @@ const NODE_POSITIONS: Record<AgentName, Pos> = {
   alt_score: { x: 380, y: 200 },
   policy: { x: 540, y: 140 },
   decision: { x: 700, y: 140 },
-};
-
-const NODE_LABELS: Record<AgentName, string> = {
-  identity: 'Identidad',
-  income: 'Ingresos',
-  bureau: 'Buró',
-  alt_score: 'Score Alt.',
-  policy: 'Política',
-  decision: 'Decisión',
 };
 
 const EDGES: Array<[AgentName, AgentName]> = [
