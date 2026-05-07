@@ -1,0 +1,20 @@
+.live-view {
+  position: relative;
+  width: 100%;
+}
+
+.live-view__graph {
+  padding: 24px 0;
+}
+
+.live-view__error {
+  position: sticky;
+  top: 0;
+  background: #FAEBE7;
+  border-bottom: 1px solid var(--rule);
+  color: #8C2F2F;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  padding: 10px 24px;
+  z-index: 30;
+}

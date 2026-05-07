@@ -58,9 +58,11 @@ function edgePath(from: Pos, to: Pos): string {
 
 interface Props {
   state: GraphState;
+  selectedAgent?: AgentName | null;
+  onSelectAgent?: (agent: AgentName) => void;
 }
 
-export function GraphVisualizer({ state }: Props) {
+export function GraphVisualizer({ state, selectedAgent = null, onSelectAgent }: Props) {
   return (
     <svg
       viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
@@ -87,14 +89,30 @@ export function GraphVisualizer({ state }: Props) {
           const node = state.nodes[agent];
           const pos = NODE_POSITIONS[agent];
           const style = STATE_STYLES[node.state];
+          const isSelected = selectedAgent === agent;
+          const handleActivate = onSelectAgent
+            ? () => onSelectAgent(agent)
+            : undefined;
           return (
             <g
               key={agent}
               data-agent={agent}
               data-state={node.state}
+              data-selected={isSelected || undefined}
               tabIndex={0}
               role="button"
               aria-label={`Agente ${NODE_LABELS[agent]} — ${STATE_LABELS[node.state]}`}
+              onClick={handleActivate}
+              onKeyDown={
+                handleActivate
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleActivate();
+                      }
+                    }
+                  : undefined
+              }
             >
               <circle
                 data-graph-focus-ring
@@ -105,6 +123,17 @@ export function GraphVisualizer({ state }: Props) {
                 stroke="transparent"
                 strokeWidth={2}
               />
+              {isSelected && (
+                <circle
+                  data-graph-selection-ring="true"
+                  cx={pos.x}
+                  cy={pos.y}
+                  r={NODE_RADIUS + 6}
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                />
+              )}
               <circle
                 data-agent={agent}
                 cx={pos.x}

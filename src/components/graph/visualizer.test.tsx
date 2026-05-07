@@ -170,6 +170,25 @@ describe('<GraphVisualizer> — accessibility', () => {
   });
 });
 
+describe('<GraphVisualizer> — selection visual', () => {
+  it('renders a teal selection ring on the selected agent only', () => {
+    const html = renderToStaticMarkup(
+      <GraphVisualizer state={initialGraphState()} selectedAgent="policy" />,
+    );
+    const selectedRings = html.match(/data-graph-selection-ring="true"/g) ?? [];
+    expect(selectedRings).toHaveLength(1);
+    // The selection marker sits inside the policy <g>
+    expect(html).toMatch(
+      /data-agent="policy"[^]*?data-graph-selection-ring="true"/,
+    );
+  });
+
+  it('renders no selection ring when selectedAgent is null', () => {
+    const html = renderToStaticMarkup(<GraphVisualizer state={initialGraphState()} />);
+    expect(html).not.toContain('data-graph-selection-ring');
+  });
+});
+
 describe('<GraphVisualizer> — fan-out layout', () => {
   it('renders bureau and alt_score with different y coordinates (parallel branch)', () => {
     const html = renderGraph();
