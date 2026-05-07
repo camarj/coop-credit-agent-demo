@@ -106,7 +106,10 @@ interface DecisionContribution {
 
 interface SagaContribution {
   __saga: {
-    compensated: string[];
+    type: 'saga';
+    failedAgent: string;
+    failedAt: string;
+    compensatedAgents: string[];
     reason: string;
     completedAt: string;
   };
@@ -279,7 +282,7 @@ export default async function ApplicationPage({ params }: PageProps) {
           <p className="text-[var(--fg)]">
             Solicitud abortada. El orquestador compensó{' '}
             <span data-testid="saga-compensated">
-              {saga.compensated.join(', ')}
+              {saga.compensatedAgents.join(', ')}
             </span>
             {' '}para revertir efectos colaterales.
           </p>

@@ -140,19 +140,21 @@ async function compensateStep(step: RanStep, ctx: ExecCtx): Promise<string[]> {
 
 async function walkBackSaga(
   ranSteps: RanStep[],
+  failedAgent: string,
+  failedAt: string,
   reason: string,
   applicationId: string,
   ctx: ExecCtx,
 ): Promise<void> {
-  const compensated: string[] = [];
+  const compensatedAgents: string[] = [];
 
   // LIFO across steps; intra-step parallel siblings compensate concurrently.
   for (const step of [...ranSteps].reverse()) {
     const stepCompensated = await compensateStep(step, ctx);
-    compensated.push(...stepCompensated);
+    compensatedAgents.push(...stepCompensated);
   }
 
-  if (compensated.length === 0) return;
+  if (compensatedAgents.length === 0) return;
 
   const version = await nextVersion(applicationId);
   await db.insert(applicationStates).values({
@@ -161,7 +163,10 @@ async function walkBackSaga(
     createdByAgent: 'orchestrator',
     contribution: {
       __saga: {
-        compensated,
+        type: 'saga',
+        failedAgent,
+        failedAt,
+        compensatedAgents,
         reason,
         completedAt: new Date().toISOString(),
       },
@@ -224,6 +229,9 @@ export async function runOrchestrator(
       };
       const ctxWithRecorder: ExecCtx = { ...ctx, onLlmCall: recordingOnLlmCall };
 
+      let failedAgent: string | undefined;
+      let failedAt: string | undefined;
+
       try {
         for (const step of pipeline) {
           const { ran, failure } = await runStep(
@@ -233,6 +241,8 @@ export async function runOrchestrator(
           );
           if (failure) {
             ranSteps.push(ran); // partial successes still need compensation
+            failedAgent = failure.agentName;
+            failedAt = new Date().toISOString();
             span.addEvent('orchestrator.step_failed', {
               agent: failure.agentName,
             });
@@ -266,7 +276,14 @@ export async function runOrchestrator(
           err instanceof Error
             ? `${err.constructor.name}: ${err.message}`
             : String(err);
-        await walkBackSaga(ranSteps, reason, applicationId, ctxWithRecorder);
+        await walkBackSaga(
+          ranSteps,
+          failedAgent ?? 'unknown',
+          failedAt ?? new Date().toISOString(),
+          reason,
+          applicationId,
+          ctxWithRecorder,
+        );
         throw err;
       }
     },

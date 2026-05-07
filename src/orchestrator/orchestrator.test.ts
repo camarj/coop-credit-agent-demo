@@ -135,9 +135,11 @@ describe('runOrchestrator — happy path identity → income → [bureau ‖ alt
     const saga = states.find((s) => s.createdByAgent === 'orchestrator');
     expect(saga).toBeDefined();
     const sagaContribution = saga!.contribution as {
-      __saga: { compensated: string[] };
+      __saga: { type: string; compensatedAgents: string[]; failedAgent: string };
     };
-    expect(sagaContribution.__saga.compensated).toContain('bureau');
+    expect(sagaContribution.__saga.type).toBe('saga');
+    expect(sagaContribution.__saga.compensatedAgents).toContain('bureau');
+    expect(sagaContribution.__saga.failedAgent).toBe('alt_score');
   });
 });
 
@@ -180,12 +182,22 @@ describe('runOrchestrator — saga walk-back', () => {
     const sagaRow = states[states.length - 1];
     expect(sagaRow.createdByAgent).toBe('orchestrator');
     const sagaContribution = sagaRow.contribution as {
-      __saga: { compensated: string[]; reason: string; completedAt: string };
+      __saga: {
+        type: string;
+        compensatedAgents: string[];
+        reason: string;
+        completedAt: string;
+        failedAgent: string;
+        failedAt: string;
+      };
     };
+    expect(sagaContribution.__saga.type).toBe('saga');
     // bureau has compensate(), alt_score does not — only bureau in the list
-    expect(sagaContribution.__saga.compensated).toEqual(['bureau']);
+    expect(sagaContribution.__saga.compensatedAgents).toEqual(['bureau']);
     expect(sagaContribution.__saga.reason).toContain('failing_test_agent');
     expect(sagaContribution.__saga.completedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(sagaContribution.__saga.failedAgent).toBe('failing_test_agent');
+    expect(sagaContribution.__saga.failedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     // Side-effect was reverted: the next hard pull should look like the first
     const nextPull = await getEquifaxClient().requestHardPull(target.cedula);
