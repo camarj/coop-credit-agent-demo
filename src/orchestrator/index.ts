@@ -154,9 +154,32 @@ async function walkBackSaga(
     compensatedAgents.push(...stepCompensated);
   }
 
-  if (compensatedAgents.length === 0) return;
-
   const version = await nextVersion(applicationId);
+  const completedAt = new Date().toISOString();
+
+  if (compensatedAgents.length === 0) {
+    // Pipeline aborted before any agent persisted side effects. We still
+    // mark a terminal row so deriveMode and the GET stream's terminality
+    // check can distinguish "didn't run yet" from "ran and failed with
+    // nothing to compensate". Without this row a refresh would loop the
+    // GET stream back through the orchestrator. See ADR-0009 §V1.
+    await db.insert(applicationStates).values({
+      applicationId,
+      version,
+      createdByAgent: 'orchestrator',
+      contribution: {
+        __pipeline_failure: {
+          type: 'pipeline_failure',
+          failedAgent,
+          failedAt,
+          reason,
+          completedAt,
+        },
+      },
+    });
+    return;
+  }
+
   await db.insert(applicationStates).values({
     applicationId,
     version,
@@ -168,7 +191,7 @@ async function walkBackSaga(
         failedAt,
         compensatedAgents,
         reason,
-        completedAt: new Date().toISOString(),
+        completedAt,
       },
     },
   });

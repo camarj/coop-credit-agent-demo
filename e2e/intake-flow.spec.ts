@@ -28,6 +28,14 @@ test('happy path Maria Lopez — APPROVED con confidence alta + decision banner 
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
+  // Slice 8 V1 cutover: POST persists only v0; orchestrator runs on the GET
+  // stream inside <LiveView>. The page transitions to <PersistedView> via
+  // router.refresh() once the stream emits orchestrator.complete. Wait for
+  // that transition before asserting any persisted-view testid.
+  await page.waitForSelector('[data-testid="latest-version"]', {
+    timeout: 60_000,
+  });
+
   await expect(page.getByTestId('latest-version')).toHaveText('v6');
 
   // v0..v4 unchanged from slice 6
@@ -87,6 +95,12 @@ test('fallecido — pipeline aborta upstream (income sin_afiliacion); decisionAg
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
+  // V1 cutover: wait for <LiveView> to drive the orchestrator to terminal
+  // (__pipeline_failure when income halts) and refresh into <PersistedView>.
+  await page.waitForSelector('[data-testid="latest-version"]', {
+    timeout: 45_000,
+  });
+
   // Realidad operativa del dataset: fallecidos no tienen employment ni altScore,
   // asi que incomeAgent dispara sin_afiliacion antes que decisionAgent vea el
   // state. El hard reject EXC-001 esta cableado en preDecide pero NO se ejecuta
@@ -117,6 +131,10 @@ test('autónomo Bryan Calderón — completa pipeline, decision en bucket REVIEW
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
+  await page.waitForSelector('[data-testid="latest-version"]', {
+    timeout: 45_000,
+  });
+
   // El autónomo tiene identityAgent OK pero income falla con sin_afiliacion.
   // Pipeline aborta en v1 (income agente lanza DomainError). Decision NO se
   // produce porque pipeline corta antes. Validamos que el panel v6 queda en
@@ -144,6 +162,10 @@ test('autónomo — identity ok, income halts at sin_afiliacion (state stays at 
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
+  await page.waitForSelector('[data-testid="latest-version"]', {
+    timeout: 45_000,
+  });
+
   await expect(page.getByTestId('latest-version')).toHaveText('v1');
   await expect(page.getByTestId('identity-name')).toHaveText(
     'Bryan Calderon Sevilla',
@@ -154,6 +176,7 @@ test('autónomo — identity ok, income halts at sin_afiliacion (state stays at 
 test('fallecido — identity returns valid:false, income then halts (v1)', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await page.goto('/');
 
   await page.getByLabel('Cédula').fill(FALLECIDO_CEDULA);
@@ -162,6 +185,10 @@ test('fallecido — identity returns valid:false, income then halts (v1)', async
   await page.getByLabel('Plazo (meses)').fill('24');
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
+
+  await page.waitForSelector('[data-testid="latest-version"]', {
+    timeout: 45_000,
+  });
 
   await expect(page.getByTestId('latest-version')).toHaveText('v1');
   await expect(page.getByTestId('identity-valid')).toHaveText(
@@ -173,6 +200,7 @@ test('fallecido — identity returns valid:false, income then halts (v1)', async
 test('not_found — application stays at v0, identity panel shows pending', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await page.goto('/');
 
   await page.getByLabel('Cédula').fill(NOT_FOUND_CEDULA);
@@ -182,6 +210,13 @@ test('not_found — application stays at v0, identity panel shows pending', asyn
   await page.getByTestId('submit-button').click();
   await page.waitForURL(/\/applications\/[0-9a-f-]+$/);
 
+  await page.waitForSelector('[data-testid="latest-version"]', {
+    timeout: 45_000,
+  });
+
+  // Identity throws DomainError before persisting v1; orchestrator writes
+  // the __pipeline_failure terminal marker which is excluded from the
+  // displayed latest version (operators see v0, the last agent row).
   await expect(page.getByTestId('latest-version')).toHaveText('v0');
   await expect(page.getByTestId('identity-pending')).toBeVisible();
   await expect(page.getByTestId('income-pending')).toBeVisible();

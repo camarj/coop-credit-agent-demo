@@ -204,7 +204,7 @@ describe('runOrchestrator — saga walk-back', () => {
     expect(nextPull.hardInquiriesCount).toBe(1);
   });
 
-  it('does NOT write a saga row when nothing succeeded yet (identity fails first)', async () => {
+  it('writes a __pipeline_failure marker (not a saga row) when nothing succeeded yet (identity fails first)', async () => {
     const tracer = new RecordingTracer();
 
     const intake = await intakeService.execute(
@@ -221,15 +221,32 @@ describe('runOrchestrator — saga walk-back', () => {
       runOrchestrator(intake.applicationId, { tracer }, defaultPipeline),
     ).rejects.toBeInstanceOf(DomainError);
 
-    const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(1); // only intake v0
-    const sagaRow = states.find((s) => s.createdByAgent === 'orchestrator');
-    expect(sagaRow).toBeUndefined();
+    const states = await db
+      .select()
+      .from(applicationStates)
+      .orderBy(applicationStates.version);
+    // v0 (intake) + v1 (terminal marker by orchestrator) — no agent row
+    expect(states).toHaveLength(2);
+    const agentRows = states.filter(
+      (s) =>
+        s.createdByAgent !== 'intake' && s.createdByAgent !== 'orchestrator',
+    );
+    expect(agentRows).toHaveLength(0);
+
+    const terminal = states.find((s) => s.createdByAgent === 'orchestrator');
+    expect(terminal).toBeDefined();
+    const contribution = terminal!.contribution as {
+      __saga?: unknown;
+      __pipeline_failure?: { type: string; failedAgent: string };
+    };
+    expect(contribution.__saga).toBeUndefined();
+    expect(contribution.__pipeline_failure?.type).toBe('pipeline_failure');
+    expect(contribution.__pipeline_failure?.failedAgent).toBe('identity');
   });
 });
 
 describe('runOrchestrator — failure mode', () => {
-  it('does not persist v1 when identity throws DomainError', async () => {
+  it('does not persist a v1 identity contribution when identity throws DomainError (terminal marker only)', async () => {
     const tracer = new RecordingTracer();
 
     const intake = await intakeService.execute(
@@ -247,11 +264,10 @@ describe('runOrchestrator — failure mode', () => {
     ).rejects.toBeInstanceOf(DomainError);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(1);
-    expect(states[0].version).toBe(0);
+    expect(states.find((s) => s.createdByAgent === 'identity')).toBeUndefined();
   });
 
-  it('does not persist v1 when registro civil mock is in error_500 mode', async () => {
+  it('does not persist a v1 identity contribution when registro civil mock is in error_500 mode (terminal marker only)', async () => {
     setRegistroCivilMode('error_500');
     const tracer = new RecordingTracer();
 
@@ -270,6 +286,6 @@ describe('runOrchestrator — failure mode', () => {
     ).rejects.toBeInstanceOf(OperationalError);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(1);
+    expect(states.find((s) => s.createdByAgent === 'identity')).toBeUndefined();
   });
 });

@@ -9,14 +9,49 @@ import { bootstrapAgentDeps } from '../../_bootstrap';
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const TERMINAL_AGENTS = new Set(['decision', 'orchestrator']);
+interface ApplicationStatus {
+  terminal: boolean;
+  interrupted: boolean;
+}
 
-async function isApplicationTerminal(applicationId: string): Promise<boolean> {
+async function readApplicationStatus(
+  applicationId: string,
+): Promise<ApplicationStatus> {
   const rows = await db
-    .select({ createdByAgent: applicationStates.createdByAgent })
+    .select({
+      createdByAgent: applicationStates.createdByAgent,
+      contribution: applicationStates.contribution,
+    })
     .from(applicationStates)
     .where(eq(applicationStates.applicationId, applicationId));
-  return rows.some((r) => TERMINAL_AGENTS.has(r.createdByAgent));
+
+  let terminal = false;
+  for (const r of rows) {
+    if (r.createdByAgent === 'decision') {
+      terminal = true;
+      break;
+    }
+    if (r.createdByAgent === 'orchestrator') {
+      const c = r.contribution as {
+        __saga?: { type?: string };
+        __pipeline_failure?: { type?: string };
+      };
+      if (c?.__saga?.type === 'saga' || c?.__pipeline_failure?.type === 'pipeline_failure') {
+        terminal = true;
+        break;
+      }
+    }
+  }
+
+  // Interrupted = previous run wrote agent rows but never reached a terminal
+  // marker. Re-running the orchestrator would duplicate rows because the
+  // pipeline is not resumable. Resumability is deuda slice 9+ (#2 in ADR-0009).
+  const hasAgentRows = rows.some(
+    (r) => r.createdByAgent !== 'intake' && r.createdByAgent !== 'orchestrator',
+  );
+  const interrupted = !terminal && hasAgentRows;
+
+  return { terminal, interrupted };
 }
 
 async function applicationExists(applicationId: string): Promise<boolean> {
@@ -41,7 +76,7 @@ export async function GET(
   }
 
   bootstrapAgentDeps();
-  const terminal = await isApplicationTerminal(applicationId);
+  const { terminal, interrupted } = await readApplicationStatus(applicationId);
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -61,6 +96,20 @@ export async function GET(
 
       if (terminal) {
         emit({ kind: 'already_complete', version: 1, at: Date.now() });
+        controller.close();
+        return;
+      }
+
+      if (interrupted) {
+        // A previous run wrote agent rows but never reached a terminal marker.
+        // Re-running the orchestrator would duplicate rows. Tell the client
+        // the run is over so it falls through to <PersistedView> on refresh.
+        emit({
+          kind: 'orchestrator.failed',
+          version: 1,
+          at: Date.now(),
+          reason: 'Ejecución previamente interrumpida.',
+        });
         controller.close();
         return;
       }
