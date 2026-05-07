@@ -39,13 +39,19 @@
 .live-view__graph {
   position: sticky;
   top: 32px;
+  /* The graph is the centerpiece of the live moment — it should always fit
+   * in the viewport without scroll. 80vh leaves room for the header above. */
+  height: 80vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
 }
 
 .live-view__graph svg {
   display: block;
-  width: 100%;
-  height: auto;
-  max-width: 360px;
+  width: auto;
+  height: 100%;
+  max-height: 80vh;
 }
 
 .live-view__feed {
@@ -73,8 +79,12 @@
   }
   .live-view__graph {
     position: static;
-    max-width: 320px;
+    height: 60vh;
+    max-height: 60vh;
     margin: 0 auto;
+  }
+  .live-view__graph svg {
+    max-height: 60vh;
   }
   .live-view__title {
     font-size: clamp(32px, 6vw, 44px);

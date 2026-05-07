@@ -76,7 +76,28 @@ async function executeAgent<TInput, TOutput>(
     agentName: agent.name,
     contribution: output as object,
   });
+  await demoDelay();
   return { input, output };
+}
+
+/**
+ * Demo-only artificial latency between agent steps. Reads
+ * DEMO_AGENT_DELAY_MS from the environment (default 0 — no delay).
+ *
+ * Why: mocked agents (identity, income, bureau, alt_score) finish in
+ * <50ms each. By the time the client hydrates the LiveView and opens
+ * the SSE stream, those nodes are already COMPLETE — only policy and
+ * decision (real LLM calls) animate. With DEMO_AGENT_DELAY_MS=800 the
+ * pipeline takes ~10s end to end and a webinar audience sees every
+ * node light up in sequence.
+ *
+ * Tests do not set the env var, so default 0 keeps suites fast.
+ */
+async function demoDelay(): Promise<void> {
+  const ms = parseInt(process.env.DEMO_AGENT_DELAY_MS ?? '0', 10);
+  if (ms > 0) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
 }
 
 /**

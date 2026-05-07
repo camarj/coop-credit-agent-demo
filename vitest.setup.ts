@@ -4,6 +4,10 @@ import { config } from 'dotenv';
 config({ path: '.env.local' });
 config(); // .env fallback if .env.local is missing
 
+// Tests never pay the demo-only artificial agent latency. Force to 0 even
+// if .env.local has it set for dev demo runs.
+process.env.DEMO_AGENT_DELAY_MS = '0';
+
 // Default mock deps for policyAgent and decisionAgent. Tests that exercise
 // the agents directly override these via __setDepsForTesting / __setLlmForTesting.
 // Tests downstream (orchestrator, route) inherit happy-path stubs so they

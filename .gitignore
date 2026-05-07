@@ -62,3 +62,4 @@ playwright-report/
 .playwright-mcp/
 checkpoint-*.png
 v2-*.png
+v3-*.png
