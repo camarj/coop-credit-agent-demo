@@ -179,27 +179,81 @@ export const policyAgent: Agent<PolicyInput, PolicyOutput> = {
         span.setAttribute('rag.chunks_retrieved', reranked.length);
 
         const userMessage = buildUserMessage(input, reranked);
-        const llmResult = await llm.generate({
-          system: SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userMessage }],
-          maxTokens: 512,
-          temperature: 0,
+        const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+          { role: 'user', content: userMessage },
+        ];
+
+        // Up to 2 attempts. If the first response cannot be parsed/validated
+        // (LLM occasionally returns malformed JSON or wrong shape), we feed
+        // the bad response back with a corrective prompt and try once more.
+        // If the second attempt also fails, we fall back to a canned output
+        // with `policy.degraded=true` so the orchestrator's saga path is not
+        // triggered for what is fundamentally a transient model glitch. The
+        // decisionAgent downstream sees an empty `applies` and continues.
+        let parsed: PolicyOutput | null = null;
+        let lastError: unknown = null;
+        let lastLlmResult: Awaited<ReturnType<typeof llm.generate>> | null = null;
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const llmResult = await llm.generate({
+            system: SYSTEM_PROMPT,
+            messages,
+            maxTokens: 512,
+            temperature: 0,
+          });
+          lastLlmResult = llmResult;
+          ctx.onLlmCall?.('policy', llmResult.usage);
+
+          try {
+            parsed = parseAndValidateOutput(llmResult.text);
+            span.setAttribute('policy.attempts', attempt);
+            break;
+          } catch (err) {
+            lastError = err;
+            if (attempt === 1) {
+              span.addEvent('policy.parse_failed_retrying', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+              messages.push(
+                { role: 'assistant', content: llmResult.text },
+                {
+                  role: 'user',
+                  content:
+                    'Tu respuesta anterior no fue JSON válido o no respeta el schema. Responde EXCLUSIVAMENTE con un objeto JSON válido siguiendo el schema {"applies": string[], "notes": string}. Sin texto adicional, sin explicaciones, sin code fences.',
+                },
+              );
+            }
+          }
+        }
+
+        if (lastLlmResult) {
+          span.setAttribute('llm.model.requested', lastLlmResult.modelRequested);
+          span.setAttribute('llm.model.actual', lastLlmResult.modelActual);
+          span.setAttribute('llm.degraded', lastLlmResult.degraded);
+          span.setAttribute('llm.tokens.input', lastLlmResult.usage.inputTokens);
+          span.setAttribute('llm.tokens.output', lastLlmResult.usage.outputTokens);
+        }
+
+        if (parsed) {
+          span.setAttribute('policy.applies_count', parsed.applies.length);
+          span.setAttribute('policy.degraded', false);
+          return parsed;
+        }
+
+        // Both attempts failed — fall back to canned output instead of
+        // aborting the whole pipeline via saga.
+        span.setAttribute('policy.attempts', 2);
+        span.setAttribute('policy.degraded', true);
+        span.addEvent('policy.parse_failed_fallback', {
+          error: lastError instanceof Error ? lastError.message : String(lastError),
         });
-
-        span.setAttribute('llm.model.requested', llmResult.modelRequested);
-        span.setAttribute('llm.model.actual', llmResult.modelActual);
-        span.setAttribute('llm.degraded', llmResult.degraded);
-        span.setAttribute('llm.tokens.input', llmResult.usage.inputTokens);
-        span.setAttribute('llm.tokens.output', llmResult.usage.outputTokens);
-
-        // Token usage publication. Slice 7 (ADR-0008 sec 9): orchestrator
-        // recolecta y persiste batch a application_token_usage. Tests del
-        // policyAgent NO inyectan callback, asi que el call es no-op.
-        ctx.onLlmCall?.('policy', llmResult.usage);
-
-        const output = parseAndValidateOutput(llmResult.text);
-        span.setAttribute('policy.applies_count', output.applies.length);
-        return output;
+        const canned: PolicyOutput = {
+          applies: [],
+          notes:
+            'La evaluación de política no pudo completarse — el modelo devolvió output no parseable en dos intentos. La decisión continúa en modo degradado, sin contexto de reglas.',
+        };
+        span.setAttribute('policy.applies_count', 0);
+        return canned;
       },
     );
   },

@@ -59,3 +59,7 @@ playwright-report/
 
 # Local scratch (screenshots, exploratory dumps)
 .tmp/
+.playwright-mcp/
+checkpoint-*.png
+v2-*.png
+v3-*.png

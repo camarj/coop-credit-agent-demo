@@ -1,0 +1,113 @@
+/*
+ * GraphVisualizer animations + a11y focus ring.
+ *
+ * RUNNING animation is the centerpiece — visible from a webinar audience:
+ *   1. The state circle pulses in scale + drop-shadow glow (teal).
+ *   2. Two concentric outer rings expand from the node radius outward and
+ *      fade out, staggered 800ms apart, infinite loop.
+ *
+ * prefers-reduced-motion disables every animation per ADR-0009 §4.
+ */
+
+@keyframes coop-graph-pulse-glow {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 14px var(--accent));
+  }
+}
+
+@keyframes coop-graph-ring-expand {
+  0% {
+    r: 26;
+    opacity: 0.7;
+    stroke-width: 2;
+  }
+  100% {
+    r: 50;
+    opacity: 0;
+    stroke-width: 0.5;
+  }
+}
+
+@keyframes coop-graph-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+@keyframes coop-graph-undo {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-12deg); }
+}
+
+@keyframes coop-graph-fade-in {
+  0% { opacity: 0.55; }
+  100% { opacity: 1; }
+}
+
+[data-state="RUNNING"] > circle[data-agent] {
+  animation: coop-graph-pulse-glow 1.6s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-graph-running-ring="outer"] {
+  animation: coop-graph-ring-expand 1.6s ease-out infinite;
+}
+
+[data-graph-running-ring="inner"] {
+  animation: coop-graph-ring-expand 1.6s ease-out infinite;
+  animation-delay: 0.8s;
+}
+
+[data-state="COMPLETE"] > circle[data-agent] {
+  animation: coop-graph-fade-in 320ms ease-out;
+}
+
+[data-state="FAILED"] > circle[data-agent] {
+  animation: coop-graph-shake 200ms ease-in-out;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-state="COMPENSATED"] > circle[data-agent] {
+  animation: coop-graph-undo 400ms ease-out forwards;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+[data-graph-focus-ring] {
+  pointer-events: none;
+  transition: stroke 160ms var(--ease-smooth, ease-out);
+}
+
+g[data-agent]:focus {
+  outline: none;
+}
+
+g[data-agent]:focus-visible > [data-graph-focus-ring] {
+  stroke: var(--accent);
+}
+
+g[data-agent] {
+  cursor: pointer;
+  transition: opacity 160ms var(--ease-smooth, ease-out);
+}
+
+g[data-agent]:hover > circle[data-agent] {
+  opacity: 0.92;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-state] > circle[data-agent],
+  [data-graph-running-ring] {
+    animation: none !important;
+  }
+  [data-graph-running-ring] {
+    opacity: 0;
+  }
+}

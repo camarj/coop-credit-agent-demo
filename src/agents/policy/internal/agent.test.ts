@@ -201,7 +201,7 @@ describe('policyAgent — happy path', () => {
 });
 
 describe('policyAgent — failure modes', () => {
-  it('throws DomainError when LLM returns invalid JSON', async () => {
+  it('falls back to canned output when LLM returns invalid JSON twice (no saga abort)', async () => {
     mockRetrieve.mockResolvedValue([makeChunk('MIC-003', 0.9)]);
     mockRerank.mockResolvedValue([makeChunk('MIC-003', 0.9)]);
     mockGenerate.mockResolvedValue({
@@ -213,12 +213,18 @@ describe('policyAgent — failure modes', () => {
     });
 
     const tracer = new RecordingTracer();
-    await expect(
-      policyAgent.execute(baseInput, { tracer }),
-    ).rejects.toBeInstanceOf(DomainError);
+    const result = await policyAgent.execute(baseInput, { tracer });
+
+    expect(result.applies).toEqual([]);
+    expect(result.notes).toContain('modo degradado');
+    expect(mockGenerate).toHaveBeenCalledTimes(2); // initial + 1 retry
+
+    const span = tracer.spans.find((s) => s.name === 'policy.execute')!;
+    expect(span.attributes['policy.degraded']).toBe(true);
+    expect(span.attributes['policy.attempts']).toBe(2);
   });
 
-  it('throws DomainError when LLM JSON has wrong shape', async () => {
+  it('falls back to canned output when LLM JSON has wrong shape twice', async () => {
     mockRetrieve.mockResolvedValue([makeChunk('MIC-003', 0.9)]);
     mockRerank.mockResolvedValue([makeChunk('MIC-003', 0.9)]);
     mockGenerate.mockResolvedValue({
@@ -230,9 +236,51 @@ describe('policyAgent — failure modes', () => {
     });
 
     const tracer = new RecordingTracer();
-    await expect(
-      policyAgent.execute(baseInput, { tracer }),
-    ).rejects.toBeInstanceOf(DomainError);
+    const result = await policyAgent.execute(baseInput, { tracer });
+
+    expect(result.applies).toEqual([]);
+    expect(result.notes).toContain('modo degradado');
+
+    const span = tracer.spans.find((s) => s.name === 'policy.execute')!;
+    expect(span.attributes['policy.degraded']).toBe(true);
+  });
+
+  it('recovers when the retry attempt returns valid JSON', async () => {
+    mockRetrieve.mockResolvedValue([makeChunk('MIC-003', 0.9)]);
+    mockRerank.mockResolvedValue([makeChunk('MIC-003', 0.9)]);
+    // First call: malformed. Second call: valid.
+    mockGenerate
+      .mockResolvedValueOnce({
+        text: 'not json',
+        modelRequested: 'claude-sonnet-4-6',
+        modelActual: 'claude-sonnet-4-6',
+        degraded: false,
+        usage: { inputTokens: 100, outputTokens: 30 },
+      })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ applies: ['MIC-003'], notes: 'aplica MIC-003' }),
+        modelRequested: 'claude-sonnet-4-6',
+        modelActual: 'claude-sonnet-4-6',
+        degraded: false,
+        usage: { inputTokens: 60, outputTokens: 18 },
+      });
+
+    const tracer = new RecordingTracer();
+    const result = await policyAgent.execute(baseInput, { tracer });
+
+    expect(result.applies).toEqual(['MIC-003']);
+    expect(result.notes).toBe('aplica MIC-003');
+    expect(mockGenerate).toHaveBeenCalledTimes(2);
+
+    const span = tracer.spans.find((s) => s.name === 'policy.execute')!;
+    expect(span.attributes['policy.degraded']).toBe(false);
+    expect(span.attributes['policy.attempts']).toBe(2);
+    // The retry payload should include the assistant's bad reply + a corrective user message
+    const secondCall = mockGenerate.mock.calls[1][0];
+    expect(secondCall.messages).toHaveLength(3);
+    expect(secondCall.messages[1].role).toBe('assistant');
+    expect(secondCall.messages[2].role).toBe('user');
+    expect(secondCall.messages[2].content).toContain('JSON válido');
   });
 
   it('propagates OperationalError when retriever fails', async () => {

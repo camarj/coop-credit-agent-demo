@@ -135,9 +135,11 @@ describe('runOrchestrator — happy path identity → income → [bureau ‖ alt
     const saga = states.find((s) => s.createdByAgent === 'orchestrator');
     expect(saga).toBeDefined();
     const sagaContribution = saga!.contribution as {
-      __saga: { compensated: string[] };
+      __saga: { type: string; compensatedAgents: string[]; failedAgent: string };
     };
-    expect(sagaContribution.__saga.compensated).toContain('bureau');
+    expect(sagaContribution.__saga.type).toBe('saga');
+    expect(sagaContribution.__saga.compensatedAgents).toContain('bureau');
+    expect(sagaContribution.__saga.failedAgent).toBe('alt_score');
   });
 });
 
@@ -180,19 +182,29 @@ describe('runOrchestrator — saga walk-back', () => {
     const sagaRow = states[states.length - 1];
     expect(sagaRow.createdByAgent).toBe('orchestrator');
     const sagaContribution = sagaRow.contribution as {
-      __saga: { compensated: string[]; reason: string; completedAt: string };
+      __saga: {
+        type: string;
+        compensatedAgents: string[];
+        reason: string;
+        completedAt: string;
+        failedAgent: string;
+        failedAt: string;
+      };
     };
+    expect(sagaContribution.__saga.type).toBe('saga');
     // bureau has compensate(), alt_score does not — only bureau in the list
-    expect(sagaContribution.__saga.compensated).toEqual(['bureau']);
+    expect(sagaContribution.__saga.compensatedAgents).toEqual(['bureau']);
     expect(sagaContribution.__saga.reason).toContain('failing_test_agent');
     expect(sagaContribution.__saga.completedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(sagaContribution.__saga.failedAgent).toBe('failing_test_agent');
+    expect(sagaContribution.__saga.failedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     // Side-effect was reverted: the next hard pull should look like the first
     const nextPull = await getEquifaxClient().requestHardPull(target.cedula);
     expect(nextPull.hardInquiriesCount).toBe(1);
   });
 
-  it('does NOT write a saga row when nothing succeeded yet (identity fails first)', async () => {
+  it('writes a __pipeline_failure marker (not a saga row) when nothing succeeded yet (identity fails first)', async () => {
     const tracer = new RecordingTracer();
 
     const intake = await intakeService.execute(
@@ -209,15 +221,32 @@ describe('runOrchestrator — saga walk-back', () => {
       runOrchestrator(intake.applicationId, { tracer }, defaultPipeline),
     ).rejects.toBeInstanceOf(DomainError);
 
-    const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(1); // only intake v0
-    const sagaRow = states.find((s) => s.createdByAgent === 'orchestrator');
-    expect(sagaRow).toBeUndefined();
+    const states = await db
+      .select()
+      .from(applicationStates)
+      .orderBy(applicationStates.version);
+    // v0 (intake) + v1 (terminal marker by orchestrator) — no agent row
+    expect(states).toHaveLength(2);
+    const agentRows = states.filter(
+      (s) =>
+        s.createdByAgent !== 'intake' && s.createdByAgent !== 'orchestrator',
+    );
+    expect(agentRows).toHaveLength(0);
+
+    const terminal = states.find((s) => s.createdByAgent === 'orchestrator');
+    expect(terminal).toBeDefined();
+    const contribution = terminal!.contribution as {
+      __saga?: unknown;
+      __pipeline_failure?: { type: string; failedAgent: string };
+    };
+    expect(contribution.__saga).toBeUndefined();
+    expect(contribution.__pipeline_failure?.type).toBe('pipeline_failure');
+    expect(contribution.__pipeline_failure?.failedAgent).toBe('identity');
   });
 });
 
 describe('runOrchestrator — failure mode', () => {
-  it('does not persist v1 when identity throws DomainError', async () => {
+  it('does not persist a v1 identity contribution when identity throws DomainError (terminal marker only)', async () => {
     const tracer = new RecordingTracer();
 
     const intake = await intakeService.execute(
@@ -235,11 +264,10 @@ describe('runOrchestrator — failure mode', () => {
     ).rejects.toBeInstanceOf(DomainError);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(1);
-    expect(states[0].version).toBe(0);
+    expect(states.find((s) => s.createdByAgent === 'identity')).toBeUndefined();
   });
 
-  it('does not persist v1 when registro civil mock is in error_500 mode', async () => {
+  it('does not persist a v1 identity contribution when registro civil mock is in error_500 mode (terminal marker only)', async () => {
     setRegistroCivilMode('error_500');
     const tracer = new RecordingTracer();
 
@@ -258,6 +286,6 @@ describe('runOrchestrator — failure mode', () => {
     ).rejects.toBeInstanceOf(OperationalError);
 
     const states = await db.select().from(applicationStates);
-    expect(states).toHaveLength(1);
+    expect(states.find((s) => s.createdByAgent === 'identity')).toBeUndefined();
   });
 });

@@ -1,0 +1,122 @@
+/*
+ * ReasoningStream — terminal-style live feed of agent activity.
+ *
+ * Older entries fade in opacity (still in the DOM, scrollable). The most
+ * recent entry sits at full opacity with a teal eyebrow. Auto-scrolls
+ * to the bottom on every new entry. Inteliside Design System v2 Light:
+ * eyebrow mono uppercase, Geist body, hairline borders.
+ */
+
+.reasoning-stream {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  max-height: 480px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.reasoning-stream--empty {
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 20px 24px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--fg-subtle);
+}
+
+.reasoning-stream__entry {
+  display: grid;
+  grid-template-columns: 90px 1fr auto;
+  gap: 12px;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--rule-soft, rgba(20, 18, 16, 0.08));
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--fg-muted);
+  opacity: 0.55;
+  transition: opacity 240ms ease-out;
+  animation: coop-stream-fade-in 240ms ease-out;
+}
+
+.reasoning-stream__entry:nth-last-child(2) { opacity: 0.7; }
+.reasoning-stream__entry:nth-last-child(3) { opacity: 0.6; }
+
+.reasoning-stream__entry[data-latest="true"] {
+  opacity: 1;
+  color: var(--fg);
+  background: var(--accent-wash);
+}
+
+.reasoning-stream__entry:last-child {
+  border-bottom: none;
+}
+
+@keyframes coop-stream-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 0.55;
+    transform: translateY(0);
+  }
+}
+
+.reasoning-stream__eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-weight: 500;
+  align-self: center;
+}
+
+.reasoning-stream__text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  word-break: break-word;
+  align-self: center;
+}
+
+.reasoning-stream__time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-subtle);
+  align-self: center;
+}
+
+.reasoning-stream__entry[data-kind="span.failed"] .reasoning-stream__eyebrow,
+.reasoning-stream__entry[data-kind="span.failed"] .reasoning-stream__text {
+  color: #B64545;
+}
+
+.reasoning-stream__entry[data-kind="span.compensated"] .reasoning-stream__eyebrow,
+.reasoning-stream__entry[data-kind="span.compensated"] .reasoning-stream__text {
+  color: #C67E2F;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reasoning-stream__entry {
+    animation: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .reasoning-stream__entry {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 12px 20px;
+  }
+  .reasoning-stream__time {
+    grid-row: 1;
+    justify-self: end;
+  }
+}

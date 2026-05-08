@@ -76,7 +76,28 @@ async function executeAgent<TInput, TOutput>(
     agentName: agent.name,
     contribution: output as object,
   });
+  await demoDelay();
   return { input, output };
+}
+
+/**
+ * Demo-only artificial latency between agent steps. Reads
+ * DEMO_AGENT_DELAY_MS from the environment (default 0 — no delay).
+ *
+ * Why: mocked agents (identity, income, bureau, alt_score) finish in
+ * <50ms each. By the time the client hydrates the LiveView and opens
+ * the SSE stream, those nodes are already COMPLETE — only policy and
+ * decision (real LLM calls) animate. With DEMO_AGENT_DELAY_MS=800 the
+ * pipeline takes ~10s end to end and a webinar audience sees every
+ * node light up in sequence.
+ *
+ * Tests do not set the env var, so default 0 keeps suites fast.
+ */
+async function demoDelay(): Promise<void> {
+  const ms = parseInt(process.env.DEMO_AGENT_DELAY_MS ?? '0', 10);
+  if (ms > 0) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
 }
 
 /**
@@ -140,30 +161,58 @@ async function compensateStep(step: RanStep, ctx: ExecCtx): Promise<string[]> {
 
 async function walkBackSaga(
   ranSteps: RanStep[],
+  failedAgent: string,
+  failedAt: string,
   reason: string,
   applicationId: string,
   ctx: ExecCtx,
 ): Promise<void> {
-  const compensated: string[] = [];
+  const compensatedAgents: string[] = [];
 
   // LIFO across steps; intra-step parallel siblings compensate concurrently.
   for (const step of [...ranSteps].reverse()) {
     const stepCompensated = await compensateStep(step, ctx);
-    compensated.push(...stepCompensated);
+    compensatedAgents.push(...stepCompensated);
   }
 
-  if (compensated.length === 0) return;
-
   const version = await nextVersion(applicationId);
+  const completedAt = new Date().toISOString();
+
+  if (compensatedAgents.length === 0) {
+    // Pipeline aborted before any agent persisted side effects. We still
+    // mark a terminal row so deriveMode and the GET stream's terminality
+    // check can distinguish "didn't run yet" from "ran and failed with
+    // nothing to compensate". Without this row a refresh would loop the
+    // GET stream back through the orchestrator. See ADR-0009 §V1.
+    await db.insert(applicationStates).values({
+      applicationId,
+      version,
+      createdByAgent: 'orchestrator',
+      contribution: {
+        __pipeline_failure: {
+          type: 'pipeline_failure',
+          failedAgent,
+          failedAt,
+          reason,
+          completedAt,
+        },
+      },
+    });
+    return;
+  }
+
   await db.insert(applicationStates).values({
     applicationId,
     version,
     createdByAgent: 'orchestrator',
     contribution: {
       __saga: {
-        compensated,
+        type: 'saga',
+        failedAgent,
+        failedAt,
+        compensatedAgents,
         reason,
-        completedAt: new Date().toISOString(),
+        completedAt,
       },
     },
   });
@@ -224,6 +273,9 @@ export async function runOrchestrator(
       };
       const ctxWithRecorder: ExecCtx = { ...ctx, onLlmCall: recordingOnLlmCall };
 
+      let failedAgent: string | undefined;
+      let failedAt: string | undefined;
+
       try {
         for (const step of pipeline) {
           const { ran, failure } = await runStep(
@@ -233,6 +285,8 @@ export async function runOrchestrator(
           );
           if (failure) {
             ranSteps.push(ran); // partial successes still need compensation
+            failedAgent = failure.agentName;
+            failedAt = new Date().toISOString();
             span.addEvent('orchestrator.step_failed', {
               agent: failure.agentName,
             });
@@ -266,7 +320,14 @@ export async function runOrchestrator(
           err instanceof Error
             ? `${err.constructor.name}: ${err.message}`
             : String(err);
-        await walkBackSaga(ranSteps, reason, applicationId, ctxWithRecorder);
+        await walkBackSaga(
+          ranSteps,
+          failedAgent ?? 'unknown',
+          failedAt ?? new Date().toISOString(),
+          reason,
+          applicationId,
+          ctxWithRecorder,
+        );
         throw err;
       }
     },

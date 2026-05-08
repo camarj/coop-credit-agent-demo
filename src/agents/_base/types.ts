@@ -69,10 +69,32 @@ export interface FullState {
    * Reserved namespace owned by the orchestrator (not by an agent).
    * Populated when a saga walk-back compensates one or more agents.
    * The double-underscore prefix marks orchestrator metadata vs. agent
-   * contributions. See ADR-0005.
+   * contributions. See ADR-0005 and ADR-0009 §"Cross-cutting".
+   *
+   * `type: 'saga'` is the discriminator used by `deriveMode(states)` so
+   * future orchestrator-owned rows (e.g. token_budget_exceeded in slice 9+)
+   * are distinguished without renaming.
    */
   __saga?: {
-    compensated: string[];
+    type: 'saga';
+    failedAgent: string;
+    failedAt: string;
+    compensatedAgents: string[];
+    reason: string;
+    completedAt: string;
+  };
+
+  /**
+   * Sibling of __saga for the case where a pipeline failed before any
+   * agent persisted side effects. There is nothing to compensate, but
+   * the run still needs a terminal marker so deriveMode and the GET
+   * stream's terminality check can tell "not started" from "finished
+   * without saga". See ADR-0009 §"Cross-cutting".
+   */
+  __pipeline_failure?: {
+    type: 'pipeline_failure';
+    failedAgent: string;
+    failedAt: string;
     reason: string;
     completedAt: string;
   };
